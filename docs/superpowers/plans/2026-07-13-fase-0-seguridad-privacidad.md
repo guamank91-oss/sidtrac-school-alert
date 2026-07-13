@@ -1,7 +1,7 @@
 # Fase 0 — Seguridad, multi-tenancy, privacidad y pruebas
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use `superpowers:subagent-driven-development` (recommended) or `superpowers:executing-plans` to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.  
-> **Estado:** aprobado para ejecución (2026-07-13) con ajustes listados en § Decisiones de ejecución.
+> **Estado:** **Fase 0 completada** (2026-07-13). Lista para pedir Fase 1. Sin DeceCase/ActionPlan/normativa/Perfil 360.
 
 **Goal:** Cerrar gaps de isolation multi-institución, privacidad hacia OpenRouter, auditoría tenant-aware (incl. lecturas sensibles), feature flags del módulo DECE y base pytest contra PostgreSQL — **antes** de construir Casos/Planes.
 
@@ -189,12 +189,12 @@ Fixtures: instituciones A/B; DECE_A/B, Tutor_A, Admin_A, Docente_A, Representant
 
 - [x] Flags off; `case.view_professional` no en admin; allowlist demo IDs  
 - [x] break_glass stub + audit action constant  
-- [ ] Commit: `feat: feature flags and case capabilities`
+- [x] Commit: `feat: feature flags and case capabilities`
 
 ### Task 0.9 — Gate
 
-- [x] Suite verde + checklist  
-- [ ] Stop → pedir Fase 1
+- [x] Suite verde + checklist (**27 passed** en PostgreSQL `sidtrac_test`)  
+- [x] Stop → pedir Fase 1
 
 ---
 
