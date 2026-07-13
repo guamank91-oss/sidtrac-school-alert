@@ -15,6 +15,8 @@ from app.modules.action_plans.schemas import (
     PlanApproveRequest,
     PlanNoteCreate,
 )
+from app.modules.action_plans.generation_schema import ActionPlanGeneration, GenerateRequest
+from app.modules.action_plans.application.generate import PlanGenerationService
 from app.shared.auth_context import CurrentUser
 from app.shared.enums import UserRole
 from app.shared.exceptions import DomainError, http_status_for
@@ -27,6 +29,19 @@ PlanPro = Depends(require_roles(UserRole.ADMINISTRADOR, UserRole.DECE))
 
 def _handle(exc: DomainError) -> HTTPException:
     return HTTPException(status_code=http_status_for(exc), detail=exc.message)
+
+
+@router.post("/generate", response_model=ActionPlanGeneration)
+async def generate_plan_draft(
+    data: GenerateRequest,
+    current_user: CurrentUser = PlanPro,
+    session: AsyncSession = Depends(get_db),
+):
+    """JSON draft only — does not persist."""
+    try:
+        return await PlanGenerationService(session).generate(current_user, data)
+    except DomainError as exc:
+        raise _handle(exc) from exc
 
 
 @router.post("", response_model=ActionPlanOut, status_code=201)
