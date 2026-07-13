@@ -24,6 +24,7 @@ from app.modules.rag.application.intent_guard import (
     classify_question_intent,
 )
 from app.modules.rag.application.openrouter import (
+    AI_PROVIDER_DISABLED,
     DEFAULT_MODEL,
     chat_completion,
     chat_completion_stream,
@@ -37,10 +38,15 @@ from app.modules.rag.schemas import (
 )
 from app.modules.students.infrastructure.models import StudentModel
 from app.modules.users.infrastructure.models import UserModel
+from app.shared.audit_actions import RAG_QUERY_EXECUTED
 from app.shared.auth_context import CurrentUser
 from app.shared.enums import AlertStatus, AttendanceStatus, RiskLevel, UserRole
-from app.shared.audit_actions import RAG_QUERY_EXECUTED
-from app.shared.exceptions import ForbiddenError, NotFoundError
+from app.shared.exceptions import DomainError, ForbiddenError, NotFoundError
+from app.shared.privacy.minimization import (
+    build_minimized_categories,
+    make_student_ref,
+    redact_text,
+)
 from app.shared.tenant import assert_same_institution
 
 logger = logging.getLogger(__name__)
@@ -213,6 +219,11 @@ class RagService:
         structured, messages, sources, documents = await self._build_messages(student, data)
 
         answer, tokens, error = await chat_completion(messages, temperature=0.15)
+        if error == AI_PROVIDER_DISABLED:
+            raise DomainError(
+                "El proveedor de IA está deshabilitado",
+                code=AI_PROVIDER_DISABLED,
+            )
         used_llm = answer is not None
 
         if answer is None:
@@ -241,16 +252,31 @@ class RagService:
 
         latency_ms = int((time.perf_counter() - started) * 1000)
         model_used = DEFAULT_MODEL if used_llm else "fallback-local"
+        student_ref = make_student_ref(
+            institution_id=student.institution_id, student_id=student.id
+        )
+        categories = build_minimized_categories(
+            [
+                "risk_level",
+                "grade_averages",
+                "attendance_counts",
+                "alert_types_levels",
+                "report_types_dates",
+                "dimension_summary",
+                "temporal_note",
+            ]
+        )
 
         self.session.add(
             RagQueryModel(
                 user_id=current_user.id,
                 institution_id=student.institution_id,
                 student_id=student.id,
+                student_ref=student_ref,
                 question=data.question,
                 answer=answer,
-                context_used="[REDACTED]",
-                context_categories='["pending_minimization_pipeline"]',
+                context_used=redact_text(structured),
+                context_categories=str(categories).replace("'", '"'),
                 ai_provider_used=used_llm,
                 model=model_used,
                 tokens_used=tokens,
@@ -410,6 +436,12 @@ class RagService:
                     yield {"type": "delta", "text": chunk}
                 if stop:
                     break
+        except DomainError as exc:
+            if exc.code == AI_PROVIDER_DISABLED:
+                raise
+            logger.warning("RAG stream domain error: %s", exc)
+            used_llm = False
+            error = exc.message
         except Exception as exc:  # noqa: BLE001
             logger.warning("RAG stream failed: %s", exc)
             used_llm = False
@@ -543,10 +575,13 @@ class RagService:
                 user_id=current_user.id,
                 institution_id=student.institution_id,
                 student_id=student.id,
+                student_ref=make_student_ref(
+                    institution_id=student.institution_id, student_id=student.id
+                ),
                 question=question,
                 answer=answer,
-                context_used="[REDACTED]",
-                context_categories='["pending_minimization_pipeline"]',
+                context_used=redact_text(context),
+                context_categories='["risk_level","dimension_summary"]',
                 ai_provider_used=bool(model and model not in ("intent-guard", "fallback-local")),
                 model=model,
                 tokens_used=tokens,
@@ -585,6 +620,9 @@ class RagService:
                 user_id=current_user.id,
                 institution_id=student.institution_id,
                 student_id=student.id,
+                student_ref=make_student_ref(
+                    institution_id=student.institution_id, student_id=student.id
+                ),
                 question=question,
                 answer=answer,
                 context_used=f"[intent-guard:{intent}]",

@@ -176,13 +176,13 @@ Fixtures: instituciones A/B; DECE_A/B, Tutor_A, Admin_A, Docente_A, Representant
 
 - [x] Indexer/search → `sidtrac_documents_v2`  
 - [x] Script migrate + validate  
-- [ ] Commit: `feat: chroma collection v2 with institution_id`
+- [x] Commit: `feat: chroma collection v2 with institution_id`
 
 ### Task 0.7 — Privacy + AI flags
 
-- [ ] HMAC/`student_ref`, allowlist, redact RAG store  
-- [ ] `AI_PROVIDER_DISABLED`  
-- [ ] Tests P*  
+- [x] HMAC/`student_ref`, allowlist, redact RAG store  
+- [x] `AI_PROVIDER_DISABLED`  
+- [x] Tests P*  
 - [ ] Commit: `feat: minimize AI payloads and gate provider`
 
 ### Task 0.8 — Feature flags + capabilities

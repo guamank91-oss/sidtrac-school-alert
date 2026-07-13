@@ -32,4 +32,5 @@ def http_status_for(exc: DomainError) -> int:
         "not_found": 404,
         "unauthorized": 401,
         "forbidden": 403,
+        "AI_PROVIDER_DISABLED": 503,
     }.get(exc.code, 400)
