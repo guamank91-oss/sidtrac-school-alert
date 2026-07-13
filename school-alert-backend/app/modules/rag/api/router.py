@@ -17,7 +17,7 @@ from app.modules.rag.schemas import (
 )
 from app.shared.auth_context import CurrentUser
 from app.shared.enums import UserRole
-from app.shared.exceptions import DomainError
+from app.shared.exceptions import DomainError, http_status_for
 
 router = APIRouter()
 
@@ -26,8 +26,7 @@ AdminOnly = Depends(require_roles(UserRole.ADMINISTRADOR))
 
 
 def _handle(exc: DomainError) -> HTTPException:
-    status = 404 if exc.code == "not_found" else 400
-    return HTTPException(status_code=status, detail=exc.message)
+    return HTTPException(status_code=http_status_for(exc), detail=exc.message)
 
 
 @router.post("/query", response_model=RagQueryResponse)

@@ -39,7 +39,8 @@ from app.modules.students.infrastructure.models import StudentModel
 from app.modules.users.infrastructure.models import UserModel
 from app.shared.auth_context import CurrentUser
 from app.shared.enums import AlertStatus, AttendanceStatus, RiskLevel, UserRole
-from app.shared.exceptions import NotFoundError
+from app.shared.exceptions import ForbiddenError, NotFoundError
+from app.shared.tenant import assert_same_institution
 
 logger = logging.getLogger(__name__)
 
@@ -149,16 +150,23 @@ acción DECE y a quién involucra.
 - No repitas la misma acción dos veces dentro de la respuesta."""
 
 
-def _search_chroma(student_id: int, question: str, top_k: int = 5) -> list[dict]:
+def _search_chroma(student_id: int, institution_id: int, question: str, top_k: int = 5) -> list[dict]:
     try:
         import chromadb
 
+        from app.modules.rag.application.indexer import CHROMA_DIR, _collection_name
+
         client = chromadb.PersistentClient(path=str(CHROMA_DIR))
-        collection = client.get_or_create_collection("sidtrac_documents")
+        collection = client.get_or_create_collection(_collection_name())
         results = collection.query(
             query_texts=[question],
             n_results=top_k,
-            where={"student_id": student_id},
+            where={
+                "$and": [
+                    {"student_id": student_id},
+                    {"institution_id": institution_id},
+                ]
+            },
         )
         documents = []
         ids = results.get("ids", [[]])[0]
@@ -189,6 +197,7 @@ class RagService:
         student = await self.session.get(StudentModel, data.student_id)
         if student is None:
             raise NotFoundError("Student")
+        assert_same_institution(current_user, student.institution_id)
 
         intent = classify_question_intent(data.question)
         if intent != "student_query":
@@ -276,7 +285,7 @@ class RagService:
     ) -> tuple[str, list[dict], list[str], list[dict]]:
         """Assemble the LLM messages, sources and documents for a student query."""
         structured = await self._structured_context(student)
-        documents = _search_chroma(student.id, data.question)
+        documents = _search_chroma(student.id, student.institution_id, data.question)
 
         docs_text = ""
         sources: list[str] = []
@@ -328,6 +337,7 @@ class RagService:
         student = await self.session.get(StudentModel, data.student_id)
         if student is None:
             raise NotFoundError("Student")
+        assert_same_institution(current_user, student.institution_id)
 
         intent = classify_question_intent(data.question)
         if intent != "student_query":

@@ -152,18 +152,18 @@ Fixtures: instituciones A/B; DECE_A/B, Tutor_A, Admin_A, Docente_A, Representant
 - [x] `alembic.ini` + `env.py`  
 - [x] `0001_baseline` crea schema completo (`metadata.create_all`)  
 - [x] Doc ops stamp (`alembic-ops.md`)  
-- [ ] Commit: `chore: alembic full schema baseline`
+- [x] Commit: `chore: alembic full schema baseline`
 
 ### Task 0.3 — Migración Fase 0
 
-- [ ] `0002_fase0_security_privacy`  
-- [ ] Upgrade/downgrade en copia PG  
-- [ ] Commit: `feat: fase0 security privacy schema`
+- [x] `0002_fase0_security_privacy`  
+- [x] Upgrade/downgrade en copia PG  
+- [x] Commit: `feat: fase0 security privacy schema`
 
 ### Task 0.4 — Tenant guards
 
-- [ ] `tenant.py` + routers/services  
-- [ ] Tests T1–T6, T8–T12  
+- [x] `tenant.py` + routers/services  
+- [x] Tests T1–T6, T8–T12  
 - [ ] Commit: `fix: enforce institution isolation`
 
 ### Task 0.5 — Audit enriquecido + lecturas sensibles
