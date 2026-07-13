@@ -24,6 +24,11 @@ from app.modules.notifications.infrastructure.models import (
 from app.modules.rag.infrastructure.models import IndexedDocumentModel, RagQueryModel
 from app.modules.students.infrastructure.models import StudentModel
 from app.modules.users.infrastructure.models import UserModel, UserRoleAssignmentModel
+from app.modules.normative.infrastructure.models import (
+    NormativeArticleModel,
+    NormativeDocumentModel,
+    NormativeVersionModel,
+)
 
 __all__ = [
     "InstitutionModel",
@@ -46,4 +51,7 @@ __all__ = [
     "EmailNotificationModel",
     "InternalNotificationModel",
     "AuditLogModel",
+    "NormativeDocumentModel",
+    "NormativeVersionModel",
+    "NormativeArticleModel",
 ]
