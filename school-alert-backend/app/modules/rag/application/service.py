@@ -39,6 +39,7 @@ from app.modules.students.infrastructure.models import StudentModel
 from app.modules.users.infrastructure.models import UserModel
 from app.shared.auth_context import CurrentUser
 from app.shared.enums import AlertStatus, AttendanceStatus, RiskLevel, UserRole
+from app.shared.audit_actions import RAG_QUERY_EXECUTED
 from app.shared.exceptions import ForbiddenError, NotFoundError
 from app.shared.tenant import assert_same_institution
 
@@ -262,7 +263,7 @@ class RagService:
             user_id=current_user.id,
             institution_id=student.institution_id,
             scope_type="institution",
-            action="rag_query_executed",
+            action=RAG_QUERY_EXECUTED,
             entity_type="student",
             entity_id=student.id,
             detail=f"Consulta sobre estudiante {student.id}",
@@ -558,7 +559,7 @@ class RagService:
             user_id=current_user.id,
             institution_id=student.institution_id,
             scope_type="institution",
-            action="rag_query_executed",
+            action=RAG_QUERY_EXECUTED,
             entity_type="student",
             entity_id=student.id,
             detail=audit_detail[:500] if audit_detail else None,
@@ -600,7 +601,7 @@ class RagService:
             user_id=current_user.id,
             institution_id=student.institution_id,
             scope_type="institution",
-            action="rag_query_executed",
+            action=RAG_QUERY_EXECUTED,
             entity_type="student",
             entity_id=student.id,
             detail=f"Consulta fuera de alcance ({intent}) estudiante {student.id}",

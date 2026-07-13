@@ -25,18 +25,23 @@ async def list_audit_logs(
     date_from: Optional[date] = Query(None),
     date_to: Optional[date] = Query(None),
     limit: int = Query(200, le=1000),
-    _: CurrentUser = AdminOnly,
+    current_user: CurrentUser = AdminOnly,
     session: AsyncSession = Depends(get_db),
 ):
-    """RF-51: audit trail, admin only."""
+    """RF-51: audit trail, admin only (institution-scoped + global)."""
     return await AuditService(session).list_logs(
-        action=action, user_id=user_id, date_from=date_from, date_to=date_to, limit=limit
+        current_user,
+        action=action,
+        user_id=user_id,
+        date_from=date_from,
+        date_to=date_to,
+        limit=limit,
     )
 
 
 @router.get("/actions", response_model=list[str])
 async def list_audit_actions(
-    _: CurrentUser = AdminOnly,
+    current_user: CurrentUser = AdminOnly,
     session: AsyncSession = Depends(get_db),
 ):
-    return await AuditService(session).list_actions()
+    return await AuditService(session).list_actions(current_user)

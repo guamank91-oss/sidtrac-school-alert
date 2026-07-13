@@ -32,6 +32,8 @@ from app.modules.rag.application.indexer import (
 )
 from app.modules.students.infrastructure.models import StudentModel
 from app.modules.users.infrastructure.models import UserModel
+from app.modules.audit.application.service import record_audit
+from app.shared.audit_actions import DECE_REPORT_VIEWED, STUDENT_TIMELINE_VIEWED
 from app.shared.auth_context import CurrentUser
 from app.shared.enums import AlertType, DeceReportType, RiskLevel, UserRole
 from app.shared.exceptions import ForbiddenError, NotFoundError, ValidationError
@@ -132,6 +134,19 @@ class BehavioralService:
         responses = []
         for row in result.scalars().all():
             responses.append(await self._dece_to_response(row))
+        if student_id is not None:
+            await record_audit(
+                self.session,
+                user_id=current_user.id,
+                institution_id=current_user.institution_id,
+                scope_type="institution",
+                action=DECE_REPORT_VIEWED,
+                entity_type="student",
+                entity_id=student_id,
+                detail=f"Listado reportes DECE estudiante {student_id}",
+                categories='["dece_report"]',
+            )
+            await self.session.commit()
         return responses
 
     async def create_dece_report(
@@ -563,6 +578,18 @@ class BehavioralService:
                 )
 
         entries.sort(key=lambda e: e.date, reverse=True)
+        await record_audit(
+            self.session,
+            user_id=current_user.id,
+            institution_id=current_user.institution_id,
+            scope_type="institution",
+            action=STUDENT_TIMELINE_VIEWED,
+            entity_type="student",
+            entity_id=student_id,
+            detail=f"Timeline estudiante {student_id}",
+            categories='["student_timeline"]',
+            commit=True,
+        )
         return entries
 
     async def _allowed_student_ids(

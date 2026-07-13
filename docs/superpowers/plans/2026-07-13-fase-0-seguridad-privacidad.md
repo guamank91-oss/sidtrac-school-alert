@@ -164,12 +164,12 @@ Fixtures: instituciones A/B; DECE_A/B, Tutor_A, Admin_A, Docente_A, Representant
 
 - [x] `tenant.py` + routers/services  
 - [x] Tests T1–T6, T8–T12  
-- [ ] Commit: `fix: enforce institution isolation`
+- [x] Commit: `fix: enforce institution isolation`
 
 ### Task 0.5 — Audit enriquecido + lecturas sensibles
 
-- [ ] Modelo + `record_audit` + acciones de lectura  
-- [ ] Tests A*  
+- [x] Modelo + `record_audit` + acciones de lectura  
+- [x] Tests A*  
 - [ ] Commit: `feat: tenant-aware sensitive read audit`
 
 ### Task 0.6 — Chroma v2

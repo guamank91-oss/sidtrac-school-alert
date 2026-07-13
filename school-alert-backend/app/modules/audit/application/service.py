@@ -9,8 +9,20 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.audit.infrastructure.models import AuditLogModel
 from app.modules.users.infrastructure.models import UserModel
+from app.shared.auth_context import CurrentUser
 
 logger = logging.getLogger(__name__)
+
+_INSTITUTION_REQUIRED_ACTIONS = frozenset(
+    {
+        "student_profile_viewed",
+        "student_timeline_viewed",
+        "dece_report_viewed",
+        "sensitive_context_viewed",
+        "rag_query_executed",
+        "break_glass_used",
+    }
+)
 
 
 async def record_audit(
@@ -35,6 +47,16 @@ async def record_audit(
     """
     try:
         resolved_scope = scope_type or ("global" if institution_id is None else "institution")
+        if resolved_scope == "institution" and institution_id is None:
+            logger.warning("Audit skip: institution scope without institution_id action=%s", action)
+            return
+        if action in _INSTITUTION_REQUIRED_ACTIONS and institution_id is None:
+            logger.warning("Audit skip: sensitive action without institution_id action=%s", action)
+            return
+        if resolved_scope == "global" and institution_id is not None:
+            # Global events must not carry a tenant id.
+            institution_id = None
+
         session.add(
             AuditLogModel(
                 user_id=user_id,
@@ -61,6 +83,7 @@ class AuditService:
 
     async def list_logs(
         self,
+        current_user: CurrentUser,
         action: Optional[str] = None,
         user_id: Optional[int] = None,
         date_from: Optional[date] = None,
@@ -70,6 +93,10 @@ class AuditService:
         query = (
             select(AuditLogModel, UserModel)
             .outerjoin(UserModel, AuditLogModel.user_id == UserModel.id)
+            .where(
+                (AuditLogModel.scope_type == "global")
+                | (AuditLogModel.institution_id == current_user.institution_id)
+            )
             .order_by(AuditLogModel.created_at.desc())
             .limit(limit)
         )
@@ -96,24 +123,39 @@ class AuditService:
                     "id": log.id,
                     "user_id": log.user_id,
                     "user_name": f"{user.first_name} {user.last_name}" if user else "Sistema",
+                    "institution_id": log.institution_id,
+                    "scope_type": log.scope_type,
                     "action": log.action,
                     "detail": log.detail,
+                    "entity_type": log.entity_type,
+                    "entity_id": log.entity_id,
+                    "categories": log.categories,
+                    "reason": log.reason,
                     "ip_address": log.ip_address,
                     "created_at": log.created_at,
                 }
             )
         return rows
 
-    async def list_actions(self) -> list[str]:
+    async def list_actions(self, current_user: CurrentUser) -> list[str]:
         result = await self.session.execute(
-            select(AuditLogModel.action).distinct().order_by(AuditLogModel.action)
+            select(AuditLogModel.action)
+            .where(
+                (AuditLogModel.scope_type == "global")
+                | (AuditLogModel.institution_id == current_user.institution_id)
+            )
+            .distinct()
+            .order_by(AuditLogModel.action)
         )
         return [row[0] for row in result.all()]
 
-    async def action_counts(self) -> dict[str, int]:
+    async def action_counts(self, current_user: CurrentUser) -> dict[str, int]:
         result = await self.session.execute(
-            select(AuditLogModel.action, func.count(AuditLogModel.id)).group_by(
-                AuditLogModel.action
+            select(AuditLogModel.action, func.count(AuditLogModel.id))
+            .where(
+                (AuditLogModel.scope_type == "global")
+                | (AuditLogModel.institution_id == current_user.institution_id)
             )
+            .group_by(AuditLogModel.action)
         )
         return {action: count for action, count in result.all()}

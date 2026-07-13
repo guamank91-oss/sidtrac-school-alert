@@ -7,8 +7,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.dependencies import get_current_user, require_roles
+from app.modules.audit.application.service import record_audit
 from app.modules.students.application.service import StudentService
 from app.modules.students.schemas import StudentCreate, StudentResponse, StudentUpdate
+from app.shared.audit_actions import STUDENT_PROFILE_VIEWED
 from app.shared.auth_context import CurrentUser
 from app.shared.enums import RiskLevel, StudentStatus, UserRole
 from app.shared.exceptions import DomainError, http_status_for
@@ -63,7 +65,20 @@ async def get_student(
     session: AsyncSession = Depends(get_db),
 ):
     try:
-        return await StudentService(session).get_student(student_id, current_user)
+        student = await StudentService(session).get_student(student_id, current_user)
+        await record_audit(
+            session,
+            user_id=current_user.id,
+            institution_id=student.institution_id,
+            scope_type="institution",
+            action=STUDENT_PROFILE_VIEWED,
+            entity_type="student",
+            entity_id=student.id,
+            detail=f"Perfil estudiante {student.id}",
+            categories='["student_profile"]',
+            commit=True,
+        )
+        return student
     except DomainError as exc:
         raise _handle_domain_error(exc) from exc
 

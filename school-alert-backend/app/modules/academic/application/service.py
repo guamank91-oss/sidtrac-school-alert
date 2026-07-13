@@ -19,9 +19,11 @@ from app.modules.academic.schemas import (
     StudentAcademicSummary,
     SubjectRadarPoint,
 )
+from app.modules.audit.application.service import record_audit
 from app.modules.institution.infrastructure.models import CourseModel, CourseSubjectModel, SubjectModel
 from app.modules.students.infrastructure.models import StudentModel
 from app.modules.users.infrastructure.models import UserModel
+from app.shared.audit_actions import SENSITIVE_CONTEXT_VIEWED
 from app.shared.auth_context import CurrentUser
 from app.shared.enums import AttendanceStatus, StudentStatus, UserRole
 from app.shared.exceptions import ForbiddenError, NotFoundError, ValidationError
@@ -387,6 +389,18 @@ class AcademicService:
             round(((total_att - absences) / total_att) * 100) if total_att else None
         )
 
+        await record_audit(
+            self.session,
+            user_id=current_user.id,
+            institution_id=student.institution_id,
+            scope_type="institution",
+            action=SENSITIVE_CONTEXT_VIEWED,
+            entity_type="student",
+            entity_id=student_id,
+            detail=f"Perfil académico estudiante {student_id}",
+            categories='["academic_profile"]',
+            commit=True,
+        )
         return StudentAcademicProfile(
             student_id=student_id,
             average_score=round(float(average), 2) if average is not None else None,
