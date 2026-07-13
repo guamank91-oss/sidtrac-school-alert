@@ -29,6 +29,13 @@ from app.modules.normative.infrastructure.models import (
     NormativeDocumentModel,
     NormativeVersionModel,
 )
+from app.modules.cases.infrastructure.models import (
+    CaseTriageModel,
+    DeceCaseAlertModel,
+    DeceCaseModel,
+    ExternalReferralModel,
+    ProtocolActivationModel,
+)
 
 __all__ = [
     "InstitutionModel",
@@ -54,4 +61,9 @@ __all__ = [
     "NormativeDocumentModel",
     "NormativeVersionModel",
     "NormativeArticleModel",
+    "DeceCaseModel",
+    "DeceCaseAlertModel",
+    "CaseTriageModel",
+    "ProtocolActivationModel",
+    "ExternalReferralModel",
 ]

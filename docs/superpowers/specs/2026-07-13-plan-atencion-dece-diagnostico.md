@@ -4,7 +4,7 @@
 **Estado:** aprobado con decisiones de producto (2026-07-13)  
 **Archivado (obsoleto):** [`archive/2026-07-13-plan-accion-dece-design.OBSOLETE.md`](./archive/2026-07-13-plan-accion-dece-design.OBSOLETE.md)  
 **Plan Fase 0:** [`../plans/2026-07-13-fase-0-seguridad-privacidad.md`](../plans/2026-07-13-fase-0-seguridad-privacidad.md) — **completada** ([informe](../plans/2026-07-13-fase-0-informe.md))  
-**Plan Fase 1 (siguiente):** normativa canónica (en elaboración al arrancar Fase 1)
+**Plan Fase 1:** [`../plans/2026-07-13-fase-1-normativa.md`](../plans/2026-07-13-fase-1-normativa.md) — **completada** ([informe](../plans/2026-07-13-fase-1-informe.md))
 
 ---
 
@@ -481,8 +481,8 @@ Validación: Pydantic. Referencias: solo IDs presentes en el prompt (post-resolv
 
 ```text
 Fase 0  Seguridad, multi-tenancy, privacidad y pruebas básicas   ← COMPLETADA
-Fase 1  Normativa canónica y Chroma institucional                ← SIGUIENTE
-Fase 2  DeceCase, triage, ProtocolActivation, ExternalReferral
+Fase 1  Normativa canónica y Chroma institucional                ← COMPLETADA
+Fase 2  DeceCase, triage, ProtocolActivation, ExternalReferral ← SIGUIENTE
 Fase 3  Planes versionados, acciones, notas, evidencias
 Fase 4  Generación IA JSON estricto + minimización
 Fase 5  UI profesional y vistas por actor
