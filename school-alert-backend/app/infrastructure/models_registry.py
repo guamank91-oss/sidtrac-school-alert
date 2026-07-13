@@ -36,6 +36,13 @@ from app.modules.cases.infrastructure.models import (
     ExternalReferralModel,
     ProtocolActivationModel,
 )
+from app.modules.action_plans.infrastructure.models import (
+    ActionPlanEvidenceModel,
+    ActionPlanItemModel,
+    ActionPlanModel,
+    ActionPlanNormativeRefModel,
+    ActionPlanNoteModel,
+)
 
 __all__ = [
     "InstitutionModel",
@@ -66,4 +73,9 @@ __all__ = [
     "CaseTriageModel",
     "ProtocolActivationModel",
     "ExternalReferralModel",
+    "ActionPlanModel",
+    "ActionPlanItemModel",
+    "ActionPlanNoteModel",
+    "ActionPlanNormativeRefModel",
+    "ActionPlanEvidenceModel",
 ]

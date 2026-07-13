@@ -11,6 +11,7 @@ from app.modules.institution.api.router import router as institution_router
 from app.modules.notifications.api.router import router as notifications_router
 from app.modules.normative.api.router import router as normative_router
 from app.modules.cases.api.router import router as cases_router
+from app.modules.action_plans.api.router import router as action_plans_router
 from app.modules.rag.api.router import router as rag_router
 from app.modules.reports.api.router import router as reports_router
 from app.modules.students.api.router import router as students_router
@@ -28,6 +29,7 @@ api_router.include_router(alerts_router, prefix="/alerts", tags=["alerts"])
 api_router.include_router(rag_router, prefix="/rag", tags=["rag"])
 api_router.include_router(normative_router, prefix="/normative", tags=["normative"])
 api_router.include_router(cases_router, prefix="/cases", tags=["cases"])
+api_router.include_router(action_plans_router, prefix="/action-plans", tags=["action-plans"])
 api_router.include_router(notifications_router, prefix="/notifications", tags=["notifications"])
 api_router.include_router(audit_router, prefix="/audit", tags=["audit"])
 api_router.include_router(reports_router, prefix="/reports", tags=["reports"])
