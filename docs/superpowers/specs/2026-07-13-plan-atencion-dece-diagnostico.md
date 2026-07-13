@@ -3,7 +3,8 @@
 **Fecha:** 2026-07-13  
 **Estado:** aprobado con decisiones de producto (2026-07-13)  
 **Archivado (obsoleto):** [`archive/2026-07-13-plan-accion-dece-design.OBSOLETE.md`](./archive/2026-07-13-plan-accion-dece-design.OBSOLETE.md)  
-**Plan Fase 0 (pendiente de aprobación de ejecución):** [`../plans/2026-07-13-fase-0-seguridad-privacidad.md`](../plans/2026-07-13-fase-0-seguridad-privacidad.md)
+**Plan Fase 0:** [`../plans/2026-07-13-fase-0-seguridad-privacidad.md`](../plans/2026-07-13-fase-0-seguridad-privacidad.md) — **completada** ([informe](../plans/2026-07-13-fase-0-informe.md))  
+**Plan Fase 1 (siguiente):** normativa canónica (en elaboración al arrancar Fase 1)
 
 ---
 
@@ -479,8 +480,8 @@ Validación: Pydantic. Referencias: solo IDs presentes en el prompt (post-resolv
 ## 14. Plan por fases (actualizado)
 
 ```text
-Fase 0  Seguridad, multi-tenancy, privacidad y pruebas básicas   ← SIGUIENTE
-Fase 1  Normativa canónica y Chroma institucional
+Fase 0  Seguridad, multi-tenancy, privacidad y pruebas básicas   ← COMPLETADA
+Fase 1  Normativa canónica y Chroma institucional                ← SIGUIENTE
 Fase 2  DeceCase, triage, ProtocolActivation, ExternalReferral
 Fase 3  Planes versionados, acciones, notas, evidencias
 Fase 4  Generación IA JSON estricto + minimización
@@ -521,9 +522,9 @@ Pendiente operativo (no bloquea Fase 0):
 
 | Siguiente paso | Condición |
 |----------------|-----------|
-| Ejecutar Fase 0 | Aprobación explícita del plan `2026-07-13-fase-0-seguridad-privacidad.md` |
-| Fase 1 normativa | Fase 0 merged + go-ahead |
-| Fases 2–6 | Secuenciales tras la anterior |
+| Ejecutar Fase 0 | **Hecho** (2026-07-13) — ver informe Fase 0 |
+| Fase 1 normativa | Fase 0 validada + go-ahead (aprobado implementación completa) |
+| Fases 2–6 | Secuenciales tras la anterior; informe al cerrar cada una |
 
 ---
 
