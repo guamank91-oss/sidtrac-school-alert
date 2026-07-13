@@ -183,17 +183,17 @@ Fixtures: instituciones A/B; DECE_A/B, Tutor_A, Admin_A, Docente_A, Representant
 - [x] HMAC/`student_ref`, allowlist, redact RAG store  
 - [x] `AI_PROVIDER_DISABLED`  
 - [x] Tests P*  
-- [ ] Commit: `feat: minimize AI payloads and gate provider`
+- [x] Commit: `feat: minimize AI payloads and gate provider`
 
 ### Task 0.8 — Feature flags + capabilities
 
-- [ ] Flags off; `case.view_professional` no en admin; allowlist demo IDs  
-- [ ] break_glass stub + audit action constant  
+- [x] Flags off; `case.view_professional` no en admin; allowlist demo IDs  
+- [x] break_glass stub + audit action constant  
 - [ ] Commit: `feat: feature flags and case capabilities`
 
 ### Task 0.9 — Gate
 
-- [ ] Suite verde + checklist  
+- [x] Suite verde + checklist  
 - [ ] Stop → pedir Fase 1
 
 ---
