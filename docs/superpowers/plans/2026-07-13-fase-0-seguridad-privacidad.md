@@ -140,18 +140,18 @@ Fixtures: instituciones A/B; DECE_A/B, Tutor_A, Admin_A, Docente_A, Representant
 
 ## Tasks
 
-### Task 0.1 — Scaffold pytest *(en curso)*
+### Task 0.1 — Scaffold pytest
 
-- [ ] `requirements-dev.txt` + `pytest.ini`  
-- [ ] `tests/conftest.py` (PostgreSQL `TEST_DATABASE_URL` o DB dedicada)  
-- [ ] Smoke import/health  
-- [ ] Commit: `test: add pytest scaffold against PostgreSQL`
+- [x] `requirements-dev.txt` + `pytest.ini`  
+- [x] `tests/conftest.py` (PostgreSQL `TEST_DATABASE_URL`)  
+- [x] Smoke import/health  
+- [x] Commit: `test: add pytest scaffold against PostgreSQL`
 
 ### Task 0.2 — Alembic baseline completo
 
-- [ ] `alembic.ini` + `env.py`  
-- [ ] `0001_baseline` crea schema completo  
-- [ ] Doc ops stamp  
+- [x] `alembic.ini` + `env.py`  
+- [x] `0001_baseline` crea schema completo (`metadata.create_all`)  
+- [x] Doc ops stamp (`alembic-ops.md`)  
 - [ ] Commit: `chore: alembic full schema baseline`
 
 ### Task 0.3 — Migración Fase 0
