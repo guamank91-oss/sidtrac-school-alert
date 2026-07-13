@@ -174,8 +174,8 @@ Fixtures: instituciones A/B; DECE_A/B, Tutor_A, Admin_A, Docente_A, Representant
 
 ### Task 0.6 — Chroma v2
 
-- [ ] Indexer/search → `sidtrac_documents_v2`  
-- [ ] Script migrate + validate  
+- [x] Indexer/search → `sidtrac_documents_v2`  
+- [x] Script migrate + validate  
 - [ ] Commit: `feat: chroma collection v2 with institution_id`
 
 ### Task 0.7 — Privacy + AI flags
