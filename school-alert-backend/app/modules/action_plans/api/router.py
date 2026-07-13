@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Optional
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -29,6 +31,42 @@ PlanPro = Depends(require_roles(UserRole.ADMINISTRADOR, UserRole.DECE))
 
 def _handle(exc: DomainError) -> HTTPException:
     return HTTPException(status_code=http_status_for(exc), detail=exc.message)
+
+
+@router.get("/by-case/{case_id}/active", response_model=Optional[ActionPlanOut])
+async def get_active_plan_for_case(
+    case_id: int,
+    current_user: CurrentUser = PlanStaff,
+    session: AsyncSession = Depends(get_db),
+):
+    try:
+        return await ActionPlanService(session).get_active_for_case(current_user, case_id)
+    except DomainError as exc:
+        raise _handle(exc) from exc
+
+
+@router.get("/{plan_id}/shared-summary")
+async def shared_commitment_summary(
+    plan_id: int,
+    current_user: CurrentUser = PlanStaff,
+    session: AsyncSession = Depends(get_db),
+):
+    """Family/student-safe summary fields only (no confidential notes)."""
+    try:
+        plan = await ActionPlanService(session).get_plan(current_user, plan_id)
+        public_items = [
+            {"title": i.title, "status": i.status, "due_hint": i.due_hint}
+            for i in plan.items
+            if i.status in {"pending", "in_progress", "reported_completed", "validated"}
+        ]
+        return {
+            "plan_id": plan.id,
+            "general_objective": plan.general_objective if plan.status == "active" else None,
+            "commitments": public_items,
+            "validated_progress_pct": plan.validated_progress_pct,
+        }
+    except DomainError as exc:
+        raise _handle(exc) from exc
 
 
 @router.post("/generate", response_model=ActionPlanGeneration)

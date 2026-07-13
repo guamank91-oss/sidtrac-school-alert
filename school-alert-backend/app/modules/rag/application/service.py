@@ -807,6 +807,79 @@ class RagService:
         else:
             lines.append("  - No constan acciones ejecutadas (alertas atendidas): ninguna registrada")
 
+        lines.append(
+            "--- PLAN DE ATENCIÓN ACTIVO (ActionPlan versionado; no inventar acciones ni artículos) ---"
+        )
+        try:
+            from app.modules.action_plans.infrastructure.models import (
+                ActionPlanItemModel,
+                ActionPlanModel,
+                ActionPlanNormativeRefModel,
+            )
+            from app.modules.cases.infrastructure.models import DeceCaseModel
+            from app.shared.feature_flags import action_plans_enabled
+
+            if action_plans_enabled():
+                case_row = await self.session.execute(
+                    select(DeceCaseModel)
+                    .where(
+                        DeceCaseModel.student_id == student.id,
+                        DeceCaseModel.institution_id == student.institution_id,
+                        DeceCaseModel.deleted_at.is_(None),
+                        DeceCaseModel.status.in_(["open", "under_assessment"]),
+                    )
+                    .order_by(DeceCaseModel.id.desc())
+                    .limit(1)
+                )
+                case = case_row.scalar_one_or_none()
+                active_plan = None
+                if case is not None:
+                    plan_row = await self.session.execute(
+                        select(ActionPlanModel)
+                        .where(
+                            ActionPlanModel.case_id == case.id,
+                            ActionPlanModel.status == "active",
+                        )
+                        .order_by(ActionPlanModel.version.desc())
+                        .limit(1)
+                    )
+                    active_plan = plan_row.scalar_one_or_none()
+                if active_plan is None:
+                    lines.append("  - No hay plan de atención activo para este estudiante")
+                else:
+                    lines.append(
+                        f"  - Plan id={active_plan.id} v{active_plan.version} tipo={active_plan.plan_type} "
+                        f"objetivo=\"{active_plan.general_objective[:240]}\""
+                    )
+                    items = await self.session.execute(
+                        select(ActionPlanItemModel)
+                        .where(ActionPlanItemModel.plan_id == active_plan.id)
+                        .order_by(ActionPlanItemModel.priority)
+                    )
+                    for item in items.scalars().all():
+                        lines.append(
+                            f"    · Acción [{item.status}] p{item.priority}: {item.title} "
+                            f"(rol={item.responsible_role}; due_hint={item.due_hint or '—'})"
+                        )
+                    refs = await self.session.execute(
+                        select(ActionPlanNormativeRefModel).where(
+                            ActionPlanNormativeRefModel.plan_id == active_plan.id
+                        )
+                    )
+                    for ref in refs.scalars().all():
+                        lines.append(
+                            "    · Cita normativa: "
+                            f"{{document_code:{ref.document_code}, version:{ref.version}, "
+                            f"article:{ref.article}, title:{ref.article_title}, "
+                            f"effective_from:{ref.effective_from}, "
+                            f"source_chunk_id:{ref.source_chunk_id}}}"
+                        )
+            else:
+                lines.append("  - Módulo de planes deshabilitado (FEATURE_ACTION_PLANS=false)")
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Active plan context skipped: %s", exc)
+            lines.append("  - Plan activo no disponible en este momento")
+
         dece_result = await self.session.execute(
             select(DeceReportModel)
             .where(DeceReportModel.student_id == student.id)

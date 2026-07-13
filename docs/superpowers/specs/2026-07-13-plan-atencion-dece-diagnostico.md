@@ -3,8 +3,9 @@
 **Fecha:** 2026-07-13  
 **Estado:** aprobado con decisiones de producto (2026-07-13)  
 **Archivado (obsoleto):** [`archive/2026-07-13-plan-accion-dece-design.OBSOLETE.md`](./archive/2026-07-13-plan-accion-dece-design.OBSOLETE.md)  
-**Plan Fase 0:** [`../plans/2026-07-13-fase-0-seguridad-privacidad.md`](../plans/2026-07-13-fase-0-seguridad-privacidad.md) — **completada** ([informe](../plans/2026-07-13-fase-0-informe.md))  
-**Plan Fase 1:** [`../plans/2026-07-13-fase-1-normativa.md`](../plans/2026-07-13-fase-1-normativa.md) — **completada** ([informe](../plans/2026-07-13-fase-1-informe.md))
+**Planes / informes:**  
+- Fase 0–6 informess en [`../plans/`](../plans/) (`2026-07-13-fase-*-informe.md`)  
+- Estado implementación: **Fases 0–6 completadas** (2026-07-13), suite pytest PostgreSQL en verde.
 
 ---
 
@@ -482,11 +483,11 @@ Validación: Pydantic. Referencias: solo IDs presentes en el prompt (post-resolv
 ```text
 Fase 0  Seguridad, multi-tenancy, privacidad y pruebas básicas   ← COMPLETADA
 Fase 1  Normativa canónica y Chroma institucional                ← COMPLETADA
-Fase 2  DeceCase, triage, ProtocolActivation, ExternalReferral ← SIGUIENTE
-Fase 3  Planes versionados, acciones, notas, evidencias
-Fase 4  Generación IA JSON estricto + minimización
-Fase 5  UI profesional y vistas por actor
-Fase 6  Integración plan activo ↔ chat RAG
+Fase 2  DeceCase, triage, ProtocolActivation, ExternalReferral ← COMPLETADA
+Fase 3  Planes versionados, acciones, notas, evidencias          ← COMPLETADA
+Fase 4  Generación IA JSON estricto + minimización               ← COMPLETADA
+Fase 5  UI profesional y vistas por actor                        ← COMPLETADA
+Fase 6  Integración plan activo ↔ chat RAG                       ← COMPLETADA
 ```
 
 Detalle de ejecución Fase 0: ver plan citado en el encabezado.
