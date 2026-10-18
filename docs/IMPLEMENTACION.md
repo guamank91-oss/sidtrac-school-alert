@@ -319,7 +319,7 @@ Documentación interactiva: `http://127.0.0.1:8000/docs`
 APP_NAME=SIDTRAC API
 SECRET_KEY=change-me-in-production
 ACCESS_TOKEN_EXPIRE_HOURS=8
-DATABASE_URL=postgresql+asyncpg://postgres:123@127.0.0.1:5432/sidtrac
+DATABASE_URL=postgresql+asyncpg://postgres:tu_password@127.0.0.1:5432/sidtrac
 CORS_ORIGINS=http://localhost:5173
 OPENROUTER_API_KEY=sk-or-...        # Requerido para chat IA completo
 RESEND_API_KEY=re_...               # Requerido para emails de alerta

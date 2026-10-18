@@ -11,7 +11,7 @@ Este documento contiene los comandos exactos y las consideraciones necesarias pa
 ## 1. Requisitos Previos
 
 Asegúrate de que PostgreSQL esté activo en el puerto `5432` con la contraseña configurada en `school-alert-backend/.env`. Actualmente, la base de datos `sidtrac` ya está creada y configurada con la cadena de conexión:
-`postgresql+asyncpg://postgres:123@127.0.0.1:5432/sidtrac`
+`postgresql+asyncpg://postgres:tu_password@127.0.0.1:5432/sidtrac`
 
 ---
 

@@ -1,8 +1,8 @@
 """
 PostgreSQL-backed test fixtures for SIDTRAC Fase 0+.
 
-Requires a dedicated test database. Default matches local INSTRUCCIONES.md style:
-  TEST_DATABASE_URL=postgresql+asyncpg://postgres:123@127.0.0.1:5432/sidtrac_test
+Requires a dedicated test database:
+  TEST_DATABASE_URL=postgresql+asyncpg://postgres:postgres@127.0.0.1:5432/sidtrac_test
 
 Never use SQLite. Never point this at production or the primary `sidtrac` database.
 """
@@ -17,7 +17,7 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-DEFAULT_TEST_DB = "postgresql+asyncpg://postgres:123@127.0.0.1:5432/sidtrac_test"
+DEFAULT_TEST_DB = "postgresql+asyncpg://postgres:postgres@127.0.0.1:5432/sidtrac_test"
 os.environ.setdefault("DATABASE_URL", os.environ.get("TEST_DATABASE_URL", DEFAULT_TEST_DB))
 os.environ.setdefault("APP_ENV", "test")
 os.environ.setdefault("DEBUG", "false")

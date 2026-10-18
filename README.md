@@ -13,17 +13,19 @@
 [![ChromaDB](https://img.shields.io/badge/ChromaDB-RAG_Normativo-8B5CF6?style=for-the-badge)](https://www.trychroma.com/)
 
 <p align="center">
-  <a href="#-visión-general"><b>Visión General</b></a> ·
-  <a href="#-ecosistema-bento--módulos"><b>Módulos</b></a> ·
-  <a href="#-arquitectura-del-sistema"><b>Arquitectura</b></a> ·
-  <a href="#-semáforo-inteligente-y-planes-dece"><b>Semáforo &amp; IA</b></a> ·
-  <a href="#-instalación-y-despliegue-local"><b>Instalación Rápida</b></a> ·
-  <a href="#-estructura-del-proyecto"><b>Estructura</b></a>
+  <a href="#vision-general"><b>Visión General</b></a> ·
+  <a href="#modulos"><b>Módulos</b></a> ·
+  <a href="#arquitectura"><b>Arquitectura</b></a> ·
+  <a href="#semaforo-ia"><b>Semáforo &amp; IA</b></a> ·
+  <a href="#instalacion"><b>Instalación Rápida</b></a> ·
+  <a href="#estructura"><b>Estructura</b></a>
 </p>
 
 </div>
 
 ---
+
+<a id="vision-general"></a>
 
 ## 🎯 Visión General
 
@@ -37,6 +39,8 @@ Su objetivo es **prevenir la deserción escolar, el bajo rendimiento y las vulne
 4. **Planes de Atención DECE y Copiloto RAG Normativo**, capaces de sintetizar hechos del expediente estudiantil sin exponer datos identificables (minimización PII con HMAC) y vincular artículos vigentes del RGLOEI.
 
 ---
+
+<a id="modulos"></a>
 
 ## ✨ Ecosistema Bento & Módulos
 
@@ -85,6 +89,8 @@ Su objetivo es **prevenir la deserción escolar, el bajo rendimiento y las vulne
 
 ---
 
+<a id="arquitectura"></a>
+
 ## 🏗️ Arquitectura del Sistema
 
 ```mermaid
@@ -118,6 +124,8 @@ flowchart LR
 ```
 
 ---
+
+<a id="semaforo-ia"></a>
 
 ## 🚦 Semáforo Inteligente y Planes DECE
 
@@ -182,6 +190,8 @@ stateDiagram-v2
 </details>
 
 ---
+
+<a id="instalacion"></a>
 
 ## 🚀 Instalación y Despliegue Local
 
@@ -262,6 +272,8 @@ npm run build
 ```
 
 ---
+
+<a id="estructura"></a>
 
 ## 📂 Estructura del Proyecto
 

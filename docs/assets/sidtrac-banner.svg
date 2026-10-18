@@ -7,17 +7,17 @@
     </linearGradient>
 
     <radialGradient id="orbCyan" cx="50%" cy="50%" r="50%">
-      <stop offset="0%" stop-color="#38bdf8" stop-opacity="0.38" />
+      <stop offset="0%" stop-color="#38bdf8" stop-opacity="0.35" />
       <stop offset="100%" stop-color="#38bdf8" stop-opacity="0" />
     </radialGradient>
 
     <radialGradient id="orbEmerald" cx="50%" cy="50%" r="50%">
-      <stop offset="0%" stop-color="#10b981" stop-opacity="0.32" />
+      <stop offset="0%" stop-color="#10b981" stop-opacity="0.30" />
       <stop offset="100%" stop-color="#10b981" stop-opacity="0" />
     </radialGradient>
 
     <radialGradient id="orbViolet" cx="50%" cy="50%" r="50%">
-      <stop offset="0%" stop-color="#8b5cf6" stop-opacity="0.32" />
+      <stop offset="0%" stop-color="#8b5cf6" stop-opacity="0.28" />
       <stop offset="100%" stop-color="#8b5cf6" stop-opacity="0" />
     </radialGradient>
 
@@ -28,8 +28,8 @@
     </linearGradient>
 
     <linearGradient id="cardGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.10" />
-      <stop offset="100%" stop-color="#ffffff" stop-opacity="0.03" />
+      <stop offset="0%" stop-color="#0f172a" stop-opacity="0.88" />
+      <stop offset="100%" stop-color="#091326" stop-opacity="0.92" />
     </linearGradient>
 
     <linearGradient id="barGrad" x1="0%" y1="0%" x2="100%" y2="0%">
@@ -83,8 +83,8 @@
   <!-- Outer Glass Border -->
   <rect x="1.5" y="1.5" width="1197" height="377" rx="23" fill="none" stroke="#ffffff" stroke-opacity="0.14" stroke-width="1.5" />
 
-  <!-- Left Content: Brand & Value Proposition -->
-  <g transform="translate(64, 58)">
+  <!-- Left Content Viewport (x=56..680) -->
+  <svg x="56" y="52" width="630" height="290" overflow="visible">
     <!-- Pill Badge -->
     <rect x="0" y="0" width="352" height="30" rx="15" fill="#0ea5e9" fill-opacity="0.14" stroke="#38bdf8" stroke-opacity="0.4" />
     <circle class="pulse-emerald" cx="18" cy="15" r="5" fill="#34d399" />
@@ -93,82 +93,83 @@
     </text>
 
     <!-- Main Title -->
-    <text x="0" y="96" class="font-sans" font-size="60" font-weight="800" fill="url(#titleGrad)" letter-spacing="-1">
+    <text x="0" y="96" class="font-sans" font-size="62" font-weight="800" fill="url(#titleGrad)" letter-spacing="-1">
       SIDTRAC
     </text>
 
     <!-- Subtitle -->
-    <text x="0" y="134" class="font-sans" font-size="19" font-weight="600" fill="#e2e8f0">
+    <text x="0" y="134" class="font-sans" font-size="18.5" font-weight="600" fill="#e2e8f0">
       Sistema Institucional de Detección Temprana de
     </text>
-    <text x="0" y="160" class="font-sans" font-size="19" font-weight="600" fill="#38bdf8">
+    <text x="0" y="160" class="font-sans" font-size="18.5" font-weight="600" fill="#38bdf8">
       Riesgo Académico, Asistencial y Psicosocial
     </text>
 
     <!-- Description -->
-    <text x="0" y="198" class="font-sans" font-size="13.5" fill="#94a3b8">
+    <text x="0" y="196" class="font-sans" font-size="13.5" fill="#94a3b8">
       Plataforma integral multi-rol con motor inteligente de alertas preventivas,
     </text>
-    <text x="0" y="218" class="font-sans" font-size="13.5" fill="#94a3b8">
+    <text x="0" y="216" class="font-sans" font-size="13.5" fill="#94a3b8">
       planes de atención DECE asistidos por IA + RAG normativo y seguimiento 360°.
     </text>
 
     <!-- Tech Stack Pills -->
-    <g transform="translate(0, 244)">
-      <rect x="0" y="0" width="108" height="28" rx="8" fill="#ffffff" fill-opacity="0.06" stroke="#ffffff" stroke-opacity="0.14" />
+    <svg x="0" y="242" width="600" height="36" overflow="visible">
+      <rect x="0" y="0" width="108" height="28" rx="8" fill="#0f172a" fill-opacity="0.75" stroke="#38bdf8" stroke-opacity="0.3" />
       <text x="54" y="18" text-anchor="middle" class="font-mono" font-size="11.5" font-weight="600" fill="#38bdf8">FastAPI</text>
 
-      <rect x="118" y="0" width="114" height="28" rx="8" fill="#ffffff" fill-opacity="0.06" stroke="#ffffff" stroke-opacity="0.14" />
-      <text x="175" y="18" text-anchor="middle" class="font-mono" font-size="11.5" font-weight="600" fill="#60a5fa">React 19 + TS</text>
+      <rect x="118" y="0" width="118" height="28" rx="8" fill="#0f172a" fill-opacity="0.75" stroke="#60a5fa" stroke-opacity="0.3" />
+      <text x="177" y="18" text-anchor="middle" class="font-mono" font-size="11.5" font-weight="600" fill="#60a5fa">React 19 + TS</text>
 
-      <rect x="242" y="0" width="124" height="28" rx="8" fill="#ffffff" fill-opacity="0.06" stroke="#ffffff" stroke-opacity="0.14" />
-      <text x="304" y="18" text-anchor="middle" class="font-mono" font-size="11.5" font-weight="600" fill="#34d399">PostgreSQL 16</text>
+      <rect x="246" y="0" width="126" height="28" rx="8" fill="#0f172a" fill-opacity="0.75" stroke="#34d399" stroke-opacity="0.3" />
+      <text x="309" y="18" text-anchor="middle" class="font-mono" font-size="11.5" font-weight="600" fill="#34d399">PostgreSQL 16</text>
 
-      <rect x="376" y="0" width="136" height="28" rx="8" fill="#ffffff" fill-opacity="0.06" stroke="#ffffff" stroke-opacity="0.14" />
-      <text x="444" y="18" text-anchor="middle" class="font-mono" font-size="11.5" font-weight="600" fill="#c084fc">ChromaDB · RAG</text>
-    </g>
-  </g>
+      <rect x="382" y="0" width="136" height="28" rx="8" fill="#0f172a" fill-opacity="0.75" stroke="#c084fc" stroke-opacity="0.3" />
+      <text x="450" y="18" text-anchor="middle" class="font-mono" font-size="11.5" font-weight="600" fill="#c084fc">pgvector · RAG</text>
+    </svg>
+  </svg>
 
-  <!-- Right Content: Floating Glass Bento Preview -->
-  <g class="card-float" transform="translate(720, 46)">
-    <!-- Glass Card Container -->
-    <rect x="0" y="0" width="420" height="288" rx="20" fill="url(#cardGrad)" stroke="#ffffff" stroke-opacity="0.18" stroke-width="1.2" />
+  <!-- Vertical Subtle Divider -->
+  <line x1="696" y1="54" x2="696" y2="326" stroke="#ffffff" stroke-opacity="0.08" stroke-dasharray="4 4" />
 
-    <!-- Card Header -->
-    <text x="24" y="34" class="font-mono" font-size="11" font-weight="700" fill="#7dd3fc" letter-spacing="1.4">
-      PERFIL 360° · SEMÁFORO DE INTERVENCIÓN
-    </text>
-    <rect x="328" y="18" width="68" height="22" rx="11" fill="#10b981" fill-opacity="0.18" stroke="#34d399" stroke-opacity="0.4" />
-    <text x="362" y="33" text-anchor="middle" class="font-mono" font-size="10.5" font-weight="700" fill="#6ee7b7">ACTIVO</text>
-    <line x1="24" y1="50" x2="396" y2="50" stroke="#ffffff" stroke-opacity="0.1" />
+  <!-- Right Content Viewport: Floating Glass Bento Preview (x=724..1144) -->
+  <svg x="724" y="46" width="424" height="296" overflow="visible">
+    <g class="card-float">
+      <!-- Glass Card Container -->
+      <rect x="0" y="0" width="420" height="288" rx="20" fill="url(#cardGrad)" stroke="#38bdf8" stroke-opacity="0.28" stroke-width="1.2" />
 
-    <!-- Semaphore Status Rows -->
-    <g transform="translate(24, 66)">
+      <!-- Card Header -->
+      <text x="24" y="34" class="font-mono" font-size="11" font-weight="700" fill="#7dd3fc" letter-spacing="1.2">
+        PERFIL 360° · SEMÁFORO DE INTERVENCIÓN
+      </text>
+      <rect x="328" y="18" width="68" height="22" rx="11" fill="#10b981" fill-opacity="0.18" stroke="#34d399" stroke-opacity="0.45" />
+      <text x="362" y="33" text-anchor="middle" class="font-mono" font-size="10.5" font-weight="700" fill="#6ee7b7">ACTIVO</text>
+      <line x1="24" y1="50" x2="396" y2="50" stroke="#ffffff" stroke-opacity="0.1" />
+
+      <!-- Semaphore Status Rows -->
       <!-- Row 1: Critical -->
-      <rect x="0" y="0" width="372" height="40" rx="10" fill="#ef4444" fill-opacity="0.11" stroke="#f87171" stroke-opacity="0.3" />
-      <circle class="pulse-red" cx="20" cy="20" r="6" fill="#f87171" />
-      <text x="36" y="24" class="font-sans" font-size="12.5" font-weight="600" fill="#fecaca">Alerta Crítica · Triage &amp; Protocolo DECE</text>
-      <text x="354" y="24" text-anchor="end" class="font-mono" font-size="11" font-weight="700" fill="#fca5a5">RGLOEI</text>
+      <rect x="24" y="66" width="372" height="40" rx="10" fill="#ef4444" fill-opacity="0.14" stroke="#f87171" stroke-opacity="0.35" />
+      <circle class="pulse-red" cx="44" cy="86" r="6" fill="#f87171" />
+      <text x="60" y="90" class="font-sans" font-size="12.5" font-weight="600" fill="#fecaca">Alerta Crítica · Triage &amp; Protocolo DECE</text>
+      <text x="378" y="90" text-anchor="end" class="font-mono" font-size="10.5" font-weight="700" fill="#fca5a5">RGLOEI</text>
 
       <!-- Row 2: High -->
-      <rect x="0" y="50" width="372" height="40" rx="10" fill="#f59e0b" fill-opacity="0.11" stroke="#fbbf24" stroke-opacity="0.3" />
-      <circle class="pulse-amber" cx="20" cy="70" r="6" fill="#fbbf24" />
-      <text x="36" y="74" class="font-sans" font-size="12.5" font-weight="600" fill="#fde68a">Riesgo Alto · Mitigación por Intervención</text>
-      <text x="354" y="74" text-anchor="end" class="font-mono" font-size="11" font-weight="700" fill="#fcd34d">TUTOR / DECE</text>
+      <rect x="24" y="116" width="372" height="40" rx="10" fill="#f59e0b" fill-opacity="0.14" stroke="#fbbf24" stroke-opacity="0.35" />
+      <circle class="pulse-amber" cx="44" cy="136" r="6" fill="#fbbf24" />
+      <text x="60" y="140" class="font-sans" font-size="12.5" font-weight="600" fill="#fde68a">Riesgo Alto · Mitigación por Intervención</text>
+      <text x="378" y="140" text-anchor="end" class="font-mono" font-size="10.5" font-weight="700" fill="#fcd34d">TUTOR / DECE</text>
 
       <!-- Row 3: Validated Action Plan -->
-      <rect x="0" y="100" width="372" height="40" rx="10" fill="#10b981" fill-opacity="0.11" stroke="#34d399" stroke-opacity="0.3" />
-      <circle class="pulse-emerald" cx="20" cy="120" r="6" fill="#34d399" />
-      <text x="36" y="124" class="font-sans" font-size="12.5" font-weight="600" fill="#a7f3d0">Plan Documental · Acciones Validadas</text>
-      <text x="354" y="124" text-anchor="end" class="font-mono" font-size="11" font-weight="700" fill="#6ee7b7">100% TRAZABLE</text>
-    </g>
+      <rect x="24" y="166" width="372" height="40" rx="10" fill="#10b981" fill-opacity="0.14" stroke="#34d399" stroke-opacity="0.35" />
+      <circle class="pulse-emerald" cx="44" cy="186" r="6" fill="#34d399" />
+      <text x="60" y="190" class="font-sans" font-size="12.5" font-weight="600" fill="#a7f3d0">Plan Documental · Acciones Validadas</text>
+      <text x="378" y="190" text-anchor="end" class="font-mono" font-size="10.5" font-weight="700" fill="#6ee7b7">TRAZABLE</text>
 
-    <!-- Progress Bar Section -->
-    <g transform="translate(24, 226)">
-      <text x="0" y="12" class="font-sans" font-size="11.5" font-weight="600" fill="#cbd5e1">Cumplimiento validado del Plan de Atención</text>
-      <text x="372" y="12" text-anchor="end" class="font-mono" font-size="11.5" font-weight="700" fill="#34d399">85%</text>
-      <rect x="0" y="22" width="372" height="9" rx="4.5" fill="#ffffff" fill-opacity="0.10" />
-      <rect x="0" y="22" width="316" height="9" rx="4.5" fill="url(#barGrad)" />
+      <!-- Progress Bar Section -->
+      <text x="24" y="238" class="font-sans" font-size="11.5" font-weight="600" fill="#cbd5e1">Cumplimiento validado del Plan de Atención</text>
+      <text x="396" y="238" text-anchor="end" class="font-mono" font-size="11.5" font-weight="700" fill="#34d399">85%</text>
+      <rect x="24" y="248" width="372" height="9" rx="4.5" fill="#ffffff" fill-opacity="0.10" />
+      <rect x="24" y="248" width="316" height="9" rx="4.5" fill="url(#barGrad)" />
     </g>
-  </g>
+  </svg>
 </svg>
