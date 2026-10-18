@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.modules.action_plans.application.role_normalize import normalize_plan_role
 from app.modules.action_plans.infrastructure.models import (
     ActionPlanEvidenceModel,
     ActionPlanItemModel,
@@ -17,14 +18,17 @@ from app.modules.action_plans.schemas import (
     ActionPlanOut,
     EvidenceCreate,
     ItemProgressRequest,
-    ItemStatusUpdate,
     ItemValidateRequest,
+    NormativeRefIn,
     PlanApproveRequest,
     PlanItemOut,
     PlanNoteCreate,
+    PlanNoteOut,
 )
 from app.modules.audit.application.service import record_audit
 from app.modules.cases.infrastructure.models import DeceCaseModel
+from app.modules.institution.infrastructure.models import CourseModel
+from app.modules.students.infrastructure.models import StudentModel
 from app.shared.auth_context import CurrentUser
 from app.shared.enums import UserRole
 from app.shared.exceptions import ForbiddenError, NotFoundError, ValidationError
@@ -71,6 +75,9 @@ class ActionPlanService:
             general_objective=data.general_objective,
             limitations=data.limitations,
             review_criteria=data.review_criteria,
+            opening_reason=data.opening_reason,
+            review_at_hint=data.review_at_hint,
+            document_json=data.document_json,
             approval_mode="dece_only",
             created_by=user.id,
         )
@@ -82,14 +89,20 @@ class ActionPlanService:
                     plan_id=plan.id,
                     title=item.title,
                     objective=item.objective,
-                    responsible_role=item.responsible_role,
+                    responsible_role=normalize_plan_role(item.responsible_role),
                     assignee_user_id=item.assignee_user_id,
+                    due_at=item.due_at,
                     due_hint=item.due_hint,
                     evidence_required=item.evidence_required,
                     priority=item.priority,
                     confidentiality_level=item.confidentiality_level,
                     case_dimension=item.case_dimension,
                     dece_axis=item.dece_axis,
+                    action_type=item.action_type,
+                    expected_result=item.expected_result,
+                    success_indicator=item.success_indicator,
+                    rationale=item.rationale,
+                    supporting_roles=item.supporting_roles,
                     status="pending",
                 )
             )
@@ -174,13 +187,15 @@ class ActionPlanService:
         if item.status not in {"pending", "in_progress", "reported_completed"}:
             raise ValidationError("Invalid item status for progress")
         item.status = "reported_completed"
-        if data.note:
+        if data.note and data.note.strip():
             self.session.add(
                 ActionPlanNoteModel(
                     plan_id=plan.id,
+                    item_id=item.id,
                     author_id=user.id,
                     visibility_scope="professional",
-                    text=data.note,
+                    note_kind="progress_report",
+                    text=data.note.strip(),
                 )
             )
         await record_audit(
@@ -207,9 +222,26 @@ class ActionPlanService:
         if data.approved:
             item.status = "validated"
             item.progress_pct_validated = 100
+            kind = "validation_approved"
+            label = "Validación aprobada"
         else:
             item.status = "in_progress"
             item.progress_pct_validated = 0
+            kind = "validation_rejected"
+            label = "Validación rechazada — regresa a progreso"
+
+        comment = (data.comment or "").strip()
+        note_text = f"{label}: {comment}" if comment else label
+        self.session.add(
+            ActionPlanNoteModel(
+                plan_id=plan.id,
+                item_id=item.id,
+                author_id=user.id,
+                visibility_scope="professional",
+                note_kind=kind,
+                text=note_text,
+            )
+        )
         await record_audit(
             self.session,
             user_id=user.id,
@@ -229,11 +261,16 @@ class ActionPlanService:
         require_capability(user, CASE_VIEW_PROFESSIONAL)
         if data.visibility_scope == "dece_only" and not has_capability(user, CASE_VIEW_PROFESSIONAL):
             raise ForbiddenError("Cannot write dece_only notes")
+        item_id = data.item_id
+        if item_id is not None:
+            await self._get_item(plan, item_id)
         self.session.add(
             ActionPlanNoteModel(
                 plan_id=plan.id,
+                item_id=item_id,
                 author_id=user.id,
                 visibility_scope=data.visibility_scope,
+                note_kind=data.note_kind or "manual",
                 text=data.text,
             )
         )
@@ -274,11 +311,79 @@ class ActionPlanService:
         await self.session.commit()
         return await self.get_plan(user, plan_id)
 
+    async def discard(self, user: CurrentUser, plan_id: int) -> ActionPlanOut:
+        plan = await self._get_plan(user, plan_id)
+        require_capability(user, CASE_VIEW_PROFESSIONAL)
+        if plan.status in {"discarded", "superseded"}:
+            # Idempotent: already removed from active use
+            return await self.get_plan(user, plan_id)
+        if plan.status not in {"draft", "pending_approval", "active"}:
+            raise ValidationError(
+                f"Este plan no se puede eliminar en su estado actual ({plan.status})"
+            )
+        plan.status = "discarded"
+        await record_audit(
+            self.session,
+            user_id=user.id,
+            institution_id=plan.institution_id,
+            scope_type="institution",
+            action="action_plan_discarded",
+            entity_type="action_plan",
+            entity_id=plan.id,
+            categories='["action_plan"]',
+        )
+        await self.session.commit()
+        return await self.get_plan(user, plan_id)
+
     async def get_plan(self, user: CurrentUser, plan_id: int) -> ActionPlanOut:
         plan = await self._get_plan(user, plan_id)
         items = await self._items_for_view(user, plan)
         validated = [i for i in items if i.status == "validated"]
         pct = int(round(100 * len(validated) / len(items))) if items else 0
+        professional = has_capability(user, CASE_VIEW_PROFESSIONAL)
+        refs: list[NormativeRefIn] = []
+        if professional:
+            ref_rows = await self.session.execute(
+                select(ActionPlanNormativeRefModel).where(
+                    ActionPlanNormativeRefModel.plan_id == plan.id
+                )
+            )
+            for r in ref_rows.scalars().all():
+                refs.append(
+                    NormativeRefIn(
+                        document_code=r.document_code,
+                        version=r.version,
+                        article=r.article,
+                        article_title=r.article_title,
+                        effective_from=r.effective_from,
+                        source_chunk_id=r.source_chunk_id,
+                        article_id=r.article_id,
+                    )
+                )
+        notes: list[PlanNoteOut] = []
+        visible_item_ids = {i.id for i in items}
+        note_rows = await self.session.execute(
+            select(ActionPlanNoteModel)
+            .where(ActionPlanNoteModel.plan_id == plan.id)
+            .order_by(ActionPlanNoteModel.created_at.desc(), ActionPlanNoteModel.id.desc())
+        )
+        for n in note_rows.scalars().all():
+            # Profesionales ven todas; tutor/docente solo notas de sus acciones visibles.
+            if not professional:
+                if n.item_id is None or n.item_id not in visible_item_ids:
+                    continue
+            notes.append(
+                PlanNoteOut(
+                    id=n.id,
+                    text=n.text,
+                    visibility_scope=n.visibility_scope,
+                    author_id=n.author_id,
+                    created_at=n.created_at,
+                    item_id=n.item_id,
+                    note_kind=n.note_kind,
+                )
+            )
+
         return ActionPlanOut(
             id=plan.id,
             case_id=plan.case_id,
@@ -287,9 +392,16 @@ class ActionPlanService:
             version=plan.version,
             status=plan.status,
             general_objective=plan.general_objective
-            if has_capability(user, CASE_VIEW_PROFESSIONAL)
+            if professional
             else (plan.general_objective[:80] + "…"),
+            limitations=plan.limitations if professional else None,
+            review_criteria=plan.review_criteria if professional else None,
+            opening_reason=plan.opening_reason if professional else None,
+            review_at_hint=plan.review_at_hint,
+            document_json=plan.document_json if professional else None,
             items=items,
+            notes=notes,
+            normative_references=refs,
             validated_progress_pct=pct,
         )
 
@@ -303,6 +415,60 @@ class ActionPlanService:
             select(ActionPlanModel)
             .where(ActionPlanModel.case_id == case_id, ActionPlanModel.status == "active")
             .order_by(ActionPlanModel.version.desc())
+            .limit(1)
+        )
+        plan = result.scalar_one_or_none()
+        if plan is None:
+            return None
+        return await self.get_plan(user, plan.id)
+
+    async def get_active_for_student(
+        self, user: CurrentUser, student_id: int
+    ) -> ActionPlanOut | None:
+        """Staff view of the latest active plan for a student (tutor/docente/DECE)."""
+        self._ensure()
+        student = await self.session.get(StudentModel, student_id)
+        if student is None:
+            raise NotFoundError("Student")
+        assert_same_institution(user, student.institution_id)
+
+        if user.active_role == UserRole.TUTOR:
+            course_ok = await self.session.execute(
+                select(CourseModel.id).where(
+                    CourseModel.id == student.course_id,
+                    CourseModel.tutor_id == user.id,
+                )
+            )
+            if course_ok.scalar_one_or_none() is None:
+                raise ForbiddenError("You can only view plans for students in your course")
+
+        if user.active_role == UserRole.DOCENTE:
+            from app.modules.institution.infrastructure.models import CourseSubjectModel
+
+            teaches = await self.session.execute(
+                select(CourseSubjectModel.id).where(
+                    CourseSubjectModel.course_id == student.course_id,
+                    CourseSubjectModel.teacher_id == user.id,
+                ).limit(1)
+            )
+            if teaches.scalar_one_or_none() is None:
+                raise ForbiddenError(
+                    "Solo puede ver planes de estudiantes de los cursos donde imparte materia"
+                )
+
+        if user.active_role == UserRole.REPRESENTANTE:
+            if student.guardian_id != user.id:
+                raise ForbiddenError("Solo puede ver el plan de sus representados")
+
+        result = await self.session.execute(
+            select(ActionPlanModel)
+            .join(DeceCaseModel, DeceCaseModel.id == ActionPlanModel.case_id)
+            .where(
+                DeceCaseModel.student_id == student_id,
+                DeceCaseModel.deleted_at.is_(None),
+                ActionPlanModel.status == "active",
+            )
+            .order_by(ActionPlanModel.version.desc(), ActionPlanModel.id.desc())
             .limit(1)
         )
         plan = result.scalar_one_or_none()
@@ -325,13 +491,26 @@ class ActionPlanService:
         return item
 
     def _can_report(self, user: CurrentUser, item: ActionPlanItemModel) -> bool:
-        if has_capability(user, CASE_VIEW_PROFESSIONAL):
-            return True
+        """Solo el rol activo (o asignado) reporta; DECE no reporta por otros roles."""
         if item.assignee_user_id == user.id:
             return True
-        if item.responsible_role == user.active_role.value:
+        if not user.active_role:
+            return False
+        role_code = normalize_plan_role(item.responsible_role, default="")
+        if role_code == user.active_role.value:
             return True
-        return False
+        supports = {
+            normalize_plan_role(p, default="")
+            for p in (item.supporting_roles or "").split(",")
+            if p.strip()
+        }
+        return user.active_role.value in supports
+
+    def _can_view_item(self, user: CurrentUser, item: ActionPlanItemModel) -> bool:
+        # DECE ve todas para validar/supervisar; tutor/docente solo las suyas.
+        if has_capability(user, CASE_VIEW_PROFESSIONAL):
+            return True
+        return self._can_report(user, item)
 
     async def _items_for_view(self, user: CurrentUser, plan: ActionPlanModel) -> list[PlanItemOut]:
         result = await self.session.execute(
@@ -343,7 +522,7 @@ class ActionPlanService:
         professional = has_capability(user, CASE_VIEW_PROFESSIONAL)
         out: list[PlanItemOut] = []
         for item in items:
-            if not professional and not self._can_report(user, item):
+            if not self._can_view_item(user, item):
                 continue
             out.append(
                 PlanItemOut(
@@ -351,11 +530,19 @@ class ActionPlanService:
                     title=item.title,
                     objective=item.objective if professional else item.title,
                     status=item.status,
-                    responsible_role=item.responsible_role,
+                    responsible_role=normalize_plan_role(item.responsible_role),
                     assignee_user_id=item.assignee_user_id,
+                    due_at=item.due_at,
                     due_hint=item.due_hint,
                     evidence_required=item.evidence_required,
                     priority=item.priority,
+                    case_dimension=item.case_dimension if professional else None,
+                    dece_axis=item.dece_axis if professional else None,
+                    action_type=item.action_type if professional else None,
+                    expected_result=item.expected_result if professional else None,
+                    success_indicator=item.success_indicator if professional else None,
+                    rationale=item.rationale if professional else None,
+                    supporting_roles=item.supporting_roles if professional else None,
                 )
             )
         return out

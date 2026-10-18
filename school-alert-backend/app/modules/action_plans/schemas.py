@@ -11,12 +11,18 @@ class PlanItemIn(BaseModel):
     objective: str
     responsible_role: str = "dece"
     assignee_user_id: Optional[int] = None
+    due_at: Optional[datetime] = None
     due_hint: Optional[str] = None
     evidence_required: bool = False
     priority: int = 1
     confidentiality_level: str = "professional"
     case_dimension: Optional[str] = None
     dece_axis: Optional[str] = None
+    action_type: Optional[str] = None
+    expected_result: Optional[str] = None
+    success_indicator: Optional[str] = None
+    rationale: Optional[str] = None
+    supporting_roles: Optional[str] = None
 
 
 class NormativeRefIn(BaseModel):
@@ -35,6 +41,9 @@ class ActionPlanCreate(BaseModel):
     general_objective: str
     limitations: Optional[str] = None
     review_criteria: Optional[str] = None
+    opening_reason: Optional[str] = None
+    review_at_hint: Optional[str] = None
+    document_json: Optional[str] = None
     items: list[PlanItemIn] = Field(default_factory=list)
     normative_references: list[NormativeRefIn] = Field(default_factory=list)
 
@@ -55,6 +64,8 @@ class ItemValidateRequest(BaseModel):
 class PlanNoteCreate(BaseModel):
     text: str
     visibility_scope: str = "professional"
+    item_id: Optional[int] = None
+    note_kind: Optional[str] = None
 
 
 class EvidenceCreate(BaseModel):
@@ -79,9 +90,27 @@ class PlanItemOut(BaseModel):
     status: str
     responsible_role: str
     assignee_user_id: Optional[int]
+    due_at: Optional[datetime] = None
     due_hint: Optional[str]
     evidence_required: bool
     priority: int
+    case_dimension: Optional[str] = None
+    dece_axis: Optional[str] = None
+    action_type: Optional[str] = None
+    expected_result: Optional[str] = None
+    success_indicator: Optional[str] = None
+    rationale: Optional[str] = None
+    supporting_roles: Optional[str] = None
+
+
+class PlanNoteOut(BaseModel):
+    id: int
+    text: str
+    visibility_scope: str
+    author_id: int
+    created_at: datetime
+    item_id: Optional[int] = None
+    note_kind: Optional[str] = None
 
 
 class ActionPlanOut(BaseModel):
@@ -92,5 +121,12 @@ class ActionPlanOut(BaseModel):
     version: int
     status: str
     general_objective: str
+    limitations: Optional[str] = None
+    review_criteria: Optional[str] = None
+    opening_reason: Optional[str] = None
+    review_at_hint: Optional[str] = None
+    document_json: Optional[str] = None
     items: list[PlanItemOut]
+    notes: list[PlanNoteOut] = Field(default_factory=list)
+    normative_references: list[NormativeRefIn] = Field(default_factory=list)
     validated_progress_pct: int = 0

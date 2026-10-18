@@ -70,12 +70,6 @@ class AlertService:
 
         if current_user.active_role == UserRole.TUTOR:
             query = query.where(CourseModel.tutor_id == current_user.id)
-        elif current_user.active_role == UserRole.INSPECTOR:
-            query = query.where(
-                AlertModel.alert_type.in_(
-                    [AlertType.CONDUCTUAL, AlertType.DISCIPLINARIA, AlertType.COMBINADA]
-                )
-            )
 
         if status:
             query = query.where(AlertModel.status == status)

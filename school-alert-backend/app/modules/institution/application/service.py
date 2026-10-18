@@ -105,8 +105,36 @@ class InstitutionService:
 
     async def activate_term(self, term_id: int) -> AcademicTermResponse:
         term = await self._get_term(term_id)
-        await self._deactivate_terms(term.institution_id, exclude_id=term_id)
+        await self.session.execute(
+            update(AcademicTermModel)
+            .where(AcademicTermModel.institution_id == term.institution_id)
+            .values(is_active=False)
+        )
         term.is_active = True
+        await self.session.commit()
+        await self.session.refresh(term)
+        return AcademicTermResponse.model_validate(term)
+
+    async def close_term(self, term_id: int) -> AcademicTermResponse:
+        from app.modules.alerts.infrastructure.models import AlertModel
+        from app.modules.students.infrastructure.models import StudentModel
+        from app.shared.enums import AlertStatus, RiskLevel
+
+        term = await self._get_term(term_id)
+        term.is_active = False
+
+        await self.session.execute(
+            update(AlertModel)
+            .where(AlertModel.academic_term_id == term_id, AlertModel.status == AlertStatus.ACTIVA)
+            .values(status=AlertStatus.ARCHIVADA)
+        )
+
+        await self.session.execute(
+            update(StudentModel)
+            .where(StudentModel.institution_id == term.institution_id)
+            .values(current_risk_level=RiskLevel.BAJO)
+        )
+
         await self.session.commit()
         await self.session.refresh(term)
         return AcademicTermResponse.model_validate(term)

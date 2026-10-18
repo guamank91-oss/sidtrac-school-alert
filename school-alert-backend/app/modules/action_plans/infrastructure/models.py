@@ -21,6 +21,9 @@ class ActionPlanModel(Base):
     general_objective: Mapped[str] = mapped_column("objetivo_general", Text, nullable=False)
     limitations: Mapped[Optional[str]] = mapped_column("limitaciones", Text)
     review_criteria: Mapped[Optional[str]] = mapped_column("criterios_revision", Text)
+    opening_reason: Mapped[Optional[str]] = mapped_column("motivo_apertura", Text)
+    review_at_hint: Mapped[Optional[str]] = mapped_column(String(120))
+    document_json: Mapped[Optional[str]] = mapped_column(Text)
     approval_mode: Mapped[str] = mapped_column(String(40), nullable=False, default="dece_only")
     approved_by: Mapped[Optional[int]] = mapped_column(ForeignKey("usuarios.id"))
     approved_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
@@ -47,6 +50,8 @@ class ActionPlanItemModel(Base):
     due_hint: Mapped[Optional[str]] = mapped_column(String(120))
     expected_result: Mapped[Optional[str]] = mapped_column(Text)
     success_indicator: Mapped[Optional[str]] = mapped_column(Text)
+    rationale: Mapped[Optional[str]] = mapped_column(Text)
+    supporting_roles: Mapped[Optional[str]] = mapped_column(String(200))
     evidence_required: Mapped[bool] = mapped_column(Boolean, default=False)
     priority: Mapped[int] = mapped_column(Integer, default=1)
     confidentiality_level: Mapped[str] = mapped_column(String(40), default="professional")
@@ -59,8 +64,12 @@ class ActionPlanNoteModel(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     plan_id: Mapped[int] = mapped_column(ForeignKey("planes_accion.id", ondelete="CASCADE"), nullable=False)
+    item_id: Mapped[Optional[int]] = mapped_column(
+        "accion_id", ForeignKey("acciones_plan.id", ondelete="SET NULL")
+    )
     author_id: Mapped[int] = mapped_column("autor_id", ForeignKey("usuarios.id"), nullable=False)
     visibility_scope: Mapped[str] = mapped_column(String(40), nullable=False, default="professional")
+    note_kind: Mapped[Optional[str]] = mapped_column(String(40))
     text: Mapped[str] = mapped_column("texto", Text, nullable=False)
     created_at: Mapped[datetime] = mapped_column("creado_en", DateTime(timezone=True), server_default=func.now())
 
@@ -70,7 +79,9 @@ class ActionPlanNormativeRefModel(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     plan_id: Mapped[int] = mapped_column(ForeignKey("planes_accion.id", ondelete="CASCADE"), nullable=False)
-    article_id: Mapped[Optional[int]] = mapped_column(ForeignKey("articulos_normativos.id"))
+    article_id: Mapped[Optional[int]] = mapped_column(
+        "articulo_id", ForeignKey("articulos_normativos.id")
+    )
     document_code: Mapped[str] = mapped_column(String(80), nullable=False)
     version: Mapped[str] = mapped_column(String(120), nullable=False)
     article: Mapped[str] = mapped_column(String(40), nullable=False)
@@ -95,3 +106,17 @@ class ActionPlanEvidenceModel(Base):
     confidentiality_level: Mapped[str] = mapped_column(String(40), default="professional")
     uploaded_by: Mapped[int] = mapped_column(ForeignKey("usuarios.id"), nullable=False)
     created_at: Mapped[datetime] = mapped_column("creado_en", DateTime(timezone=True), server_default=func.now())
+
+
+class ActionPlanSignatureModel(Base):
+    __tablename__ = "firmas_plan_accion"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    plan_id: Mapped[int] = mapped_column(ForeignKey("planes_accion.id", ondelete="CASCADE"), nullable=False)
+    signer_role: Mapped[str] = mapped_column(String(40), nullable=False)
+    signer_name: Mapped[str] = mapped_column(String(200), nullable=False)
+    signer_national_id: Mapped[Optional[str]] = mapped_column(String(20))
+    signature_data: Mapped[str] = mapped_column(Text, nullable=False)
+    signature_type: Mapped[str] = mapped_column(String(40), default="digital_draw")
+    ip_address: Mapped[Optional[str]] = mapped_column(String(45))
+    signed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import logging
 import re
 import time
@@ -23,11 +24,24 @@ from app.modules.rag.application.intent_guard import (
     GUARD_RESPONSES,
     classify_question_intent,
 )
+from app.modules.rag.application.intent import (
+    RagIntent,
+    assemble_context_for_intent,
+    classify_intent,
+    parse_structured_blocks,
+    policy_for,
+)
 from app.modules.rag.application.openrouter import (
     AI_PROVIDER_DISABLED,
     DEFAULT_MODEL,
     chat_completion,
     chat_completion_stream,
+)
+from app.modules.rag.application.plan_context import load_active_plan_bundle
+from app.modules.rag.application.student_profile import (
+    format_ficha_block,
+    load_student_ficha,
+    merge_structured_with_ficha,
 )
 from app.modules.rag.infrastructure.models import RagQueryModel
 from app.modules.rag.schemas import (
@@ -57,29 +71,40 @@ no con el estudiante ni la familia.
 
 FUENTE DE VERDAD:
 - Usa EXCLUSIVAMENTE el bloque "BASE DE CONOCIMIENTO" que recibes (PostgreSQL + ChromaDB). No inventes \
-ni uses conocimiento externo para afirmar hechos del estudiante.
+ni uses conocimiento externo para afirmar hechos del estudiante. Si un bloque no aparece, ese dato \
+no está disponible para esta pregunta.
 - Distingue los tipos con PRECISIÓN: "observación conductual", "alerta emocional", "reporte disciplinario" \
 y "anotación de tutor" NO son sinónimos. Nunca llames "emocional" a algo conductual ni al revés.
+- PLAN DE ATENCIÓN: si el contexto trae "HAY PLAN ACTIVO EN MARCHA", responde con ese objetivo y sus \
+acciones operativas. NO digas que no hay plan. Las "acciones ejecutadas" de alertas atendidas NO reemplazan \
+ni equivalen a un ActionPlan activo.
+- Si el DECE pregunta por acciones del plan (reportadas, aprobadas/validadas, pendientes, vigentes, \
+cubiertas, avance del plan), usa EXCLUSIVAMENTE los estados de "PLAN DE ATENCIÓN ACTIVO" \
+(pending / in_progress / reported_completed / validated). NO uses ACCIONES EJECUTADAS (alertas atendidas) \
+para eso. Si todas están `pending`, di claramente que ninguna fue reportada ni validada aún.
 
-CONTROL DE ALCANCE (regla dura, la decides TÚ):
+CONTROL DE RESPUESTA (obligatorio):
 - La PRIMERA línea de tu respuesta debe ser EXACTAMENTE este header, sin nada más:
-  `CONTROL: alcance=<dentro|fuera>; riesgo=<bajo|medio|alto|critico>`
-- alcance=dentro: la pregunta trata del SEGUIMIENTO de ESTE estudiante (académico, asistencia, conducta, \
-emocional, alertas, intervención DECE) O es un seguimiento del hilo (p. ej. "¿cuáles son?", "detalla", "y eso?").
-- alcance=fuera: la pregunta NO trata de este estudiante ni de su seguimiento escolar (matemáticas, clima, \
-cultura general, chistes, código, charla trivial, etc.). En ese caso, tras el header escribe ÚNICAMENTE la \
-palabra `[FUERA_DE_ALCANCE]` y NADA más. No inventes datos ni intentes responder la pregunta.
-- `riesgo` debe ser coherente con el semáforo y los reportes. Si alcance=fuera, pon el riesgo del semáforo.
+  `CONTROL: riesgo=<bajo|medio|alto|critico>`
+- Este chat YA está acotado al estudiante seleccionado. NO declaires fuera de alcance, NO uses \
+`alcance=`, NO respondas solo con `[FUERA_DE_ALCANCE]`.
+- Si la pregunta se desvía (chiste, clima, política, pedir que resuelvas una tarea), responde en 1-2 \
+frases reorientando al expediente y ofrece 1 ejemplo concreto (asistencia, notas, alertas). Sin banners \
+ni negativas rígidas.
+- Ante dudas sobre si la pregunta "cabe": interpreta de la forma más útil hacia el seguimiento del \
+estudiante y responde con lo que consta (o di qué dato no está en el expediente).
+- `riesgo` debe ser coherente con el semáforo y los reportes.
 
-USA EL HISTORIAL: preguntas de seguimiento como "¿cuáles son?", "detalla", "enuméralas", "y eso?" se \
-refieren a lo ÚLTIMO que dijiste. NO cambies de tema: si venías hablando de anotaciones, sigue con \
-anotaciones (no respondas con promedios). Si el usuario pide "cuáles", ENUMERA los ítems concretos.
-
-CÓMO RESPONDER (cuando alcance=dentro):
+CÓMO RESPONDER:
 1. Después del header CONTROL, deja una línea en blanco y escribe una RESPUESTA DIRECTA de 1 o 2 frases que \
 conteste literalmente la pregunta (empieza con Sí / No / lo esencial). Sin rodeos ni preámbulos.
 2. Después, SOLO si aporta valor, agrega secciones breves con encabezados "### " (p. ej. "### Evidencia", \
 "### Qué hacer ahora"). Pregunta simple = respuesta corta. NO fuerces plantillas de 3 secciones si no hace falta.
+
+USA EL HISTORIAL: preguntas de seguimiento como "¿cuáles son?", "detalla", "enuméralas", "y eso?", \
+"cuáles de esas", "del plan", "esas acciones" se refieren a lo ÚLTIMO que dijiste. NO cambies de tema: \
+si venías hablando del plan de atención/acción, sigue con estados del plan (no con alertas atendidas). \
+Si venías hablando de anotaciones, sigue con anotaciones. Si el usuario pide "cuáles", ENUMERA.
 
 REGLAS DE CALIDAD (obligatorias):
 - ATERRIZA EN EL TIEMPO: cuando la pregunta hable de cambio, tendencia o "últimas semanas", usa las fechas \
@@ -216,7 +241,9 @@ class RagService:
                 started=started,
             )
 
-        structured, messages, sources, documents = await self._build_messages(student, data)
+        structured, messages, sources, documents, domain_intent = await self._build_messages(
+            student, data
+        )
 
         answer, tokens, error = await chat_completion(messages, temperature=0.15)
         if error == AI_PROVIDER_DISABLED:
@@ -229,26 +256,25 @@ class RagService:
         if answer is None:
             answer = self._fallback_answer(structured, documents, error)
 
-        scope, parsed_risk = self._parse_control(answer)
-
-        if scope == "fuera":
-            answer = GUARD_RESPONSES["off_topic"]
-            sources = []
-            detected_risk = None
-            response_intent: Literal[
-                "student_query", "greeting", "off_topic", "too_vague"
-            ] = "off_topic"
-        else:
-            answer = self._strip_control_line(answer)
-            if not answer:
-                answer = self._strip_control_line(
-                    self._fallback_answer(structured, documents, error)
-                )
-                used_llm = False
-            detected_risk = parsed_risk or self._resolve_risk_level(answer, student, documents)
-            if not self._wants_recommendations(data.question):
-                answer = self._strip_reco_sections(answer)
-            response_intent = "student_query"
+        # Chat con estudiante seleccionado: nunca cortamos con "fuera de alcance".
+        # El header CONTROL solo aporta riesgo; un posible legado alcance=fuera se ignora.
+        _, parsed_risk = self._parse_control(answer)
+        answer = self._strip_control_line(answer)
+        if not answer:
+            answer = self._strip_control_line(
+                self._fallback_answer(structured, documents, error)
+            )
+            used_llm = False
+        detected_risk = parsed_risk or self._resolve_risk_level(answer, student, documents)
+        wants_reco = (
+            policy_for(domain_intent).allows_recommendations
+            or self._wants_recommendations(data.question)
+        )
+        if not wants_reco:
+            answer = self._strip_reco_sections(answer)
+        response_intent: Literal[
+            "student_query", "greeting", "off_topic", "too_vague"
+        ] = "student_query"
 
         latency_ms = int((time.perf_counter() - started) * 1000)
         model_used = DEFAULT_MODEL if used_llm else "fallback-local"
@@ -309,9 +335,33 @@ class RagService:
 
     async def _build_messages(
         self, student: StudentModel, data: RagQueryRequest
-    ) -> tuple[str, list[dict], list[str], list[dict]]:
+    ) -> tuple[str, list[dict], list[str], list[dict], RagIntent]:
         """Assemble the LLM messages, sources and documents for a student query."""
-        structured = await self._structured_context(student)
+        structured_full = await self._structured_context(student)
+        history_dicts = [
+            {"role": m.role, "content": m.content}
+            for m in (data.history or [])
+        ]
+        domain_intent = await classify_intent(data.question, history_dicts, use_llm=True)
+        policy = policy_for(domain_intent)
+        blocks = parse_structured_blocks(structured_full)
+        structured = assemble_context_for_intent(blocks, domain_intent)
+
+        # Grounded JSON package for plan intents (preferred source of truth).
+        if domain_intent in {RagIntent.ACTIVE_PLAN, RagIntent.PLAN_PROGRESS}:
+            plan_bundle = await load_active_plan_bundle(self.session, student)
+            if plan_bundle is not None:
+                structured = (
+                    f"Fecha de hoy: {date.today().isoformat()}\n\n"
+                    "=== DATOS_ESTRUCTURADOS_JSON (fuente de verdad para esta pregunta) ===\n"
+                    f"{json.dumps(plan_bundle, ensure_ascii=False, indent=2)}\n"
+                )
+
+        # Identity ficha: always present, for any intent (age, course tutor, guardian,
+        # subject teachers). Plan JSON above coexists with it, never replaces it.
+        ficha = await load_student_ficha(self.session, student)
+        structured = merge_structured_with_ficha(structured, format_ficha_block(ficha))
+
         documents = _search_chroma(student.id, student.institution_id, data.question)
 
         docs_text = ""
@@ -325,8 +375,15 @@ class RagService:
             docs_text = "(No se encontraron documentos textuales para este estudiante.)"
 
         doc_inventory = self._document_inventory(documents)
-        question_focus = self._question_focus(data.question)
-        if not self._wants_recommendations(data.question):
+        question_focus = (
+            f"INTENT={domain_intent.value}\n{policy.instruction}"
+            "\n\nIDENTIDAD: para edad, tutor DEL CURSO, representante o docente de una materia "
+            "usa SOLO DATOS_FICHA_JSON. No confundas tutor de curso con ANOTACIONES TUTOR. "
+            "Si tutor es null, di que no hay tutor de curso asignado; si guardian es null, "
+            "di que no hay representante registrado."
+        )
+        wants_reco = policy.allows_recommendations or self._wants_recommendations(data.question)
+        if not wants_reco:
             question_focus += (
                 "\n\nIMPORTANTE: esta pregunta NO pide acción. Responde SOLO el análisis/dato pedido. "
                 "PROHIBIDO incluir sección '### Qué hacer ahora', recomendaciones, sugerencias o "
@@ -334,16 +391,15 @@ class RagService:
             )
 
         context = (
-            f"=== BASE DE CONOCIMIENTO (PostgreSQL + ChromaDB) ===\n"
-            f"Información completa disponible en el sistema para este estudiante.\n"
-            f"No afirmes hechos que no aparezcan aquí abajo.\n\n"
+            f"=== BASE DE CONOCIMIENTO (intent={domain_intent.value}) ===\n"
+            f"Responde de forma fundamentada con los datos de abajo. No inventes campos faltantes.\n\n"
             f"{structured}\n\n"
             f"=== INVENTARIO DE DOCUMENTOS RECUPERADOS (ChromaDB) ===\n{doc_inventory}\n\n"
             f"=== FRAGMENTOS TEXTUALES RECUPERADOS ===\n{docs_text}"
         )
 
         messages: list[dict] = [{"role": "system", "content": SYSTEM_PROMPT}]
-        for msg in data.history[-6:]:
+        for msg in (data.history or [])[-6:]:
             messages.append({"role": msg.role, "content": msg.content})
         messages.append(
             {
@@ -355,8 +411,7 @@ class RagService:
                 ),
             }
         )
-        return structured, messages, sources, documents
-
+        return structured_full, messages, sources, documents, domain_intent
     async def query_stream(self, current_user: CurrentUser, data: RagQueryRequest):
         """Async generator of NDJSON-ready events for a streamed RAG answer."""
         started = time.perf_counter()
@@ -393,8 +448,13 @@ class RagService:
             }
             return
 
-        structured, messages, sources, documents = await self._build_messages(student, data)
-        suppress_reco = not self._wants_recommendations(data.question)
+        structured, messages, sources, documents, domain_intent = await self._build_messages(
+            student, data
+        )
+        suppress_reco = not (
+            policy_for(domain_intent).allows_recommendations
+            or self._wants_recommendations(data.question)
+        )
 
         parts: list[str] = []
         head_buffer = ""       # acumula hasta la primera línea (header CONTROL)
@@ -402,7 +462,6 @@ class RagService:
         head_done = False
         meta_sent = False
         stop = False           # corte duro: sección de recomendaciones no pedida
-        scope = "dentro"       # lo decide el LLM en el header CONTROL
         risk: str | None = None
         used_llm = True
         error: str | None = None
@@ -416,11 +475,9 @@ class RagService:
                     if "\n" not in head_buffer:
                         continue
                     first, rest = head_buffer.split("\n", 1)
-                    scope, risk = self._parse_control(first)
+                    _, risk = self._parse_control(first)
                     line_buffer = rest.lstrip("\n")
                     head_done = True
-                    if scope == "fuera":
-                        break  # fuera de alcance: descartamos el cuerpo del LLM
                     yield {"type": "meta", "sources": sources, "intent": "student_query"}
                     meta_sent = True
                 else:
@@ -447,61 +504,9 @@ class RagService:
             used_llm = False
             error = str(exc)
 
-        # El LLM decidió que la pregunta está fuera de alcance.
-        if scope == "fuera":
-            answer = GUARD_RESPONSES["off_topic"]
-            yield {"type": "meta", "sources": [], "intent": "off_topic"}
-            yield {"type": "delta", "text": answer}
-            await self._persist(
-                current_user=current_user,
-                student=student,
-                question=data.question,
-                answer=answer,
-                context=messages[-1]["content"][:8000],
-                model=DEFAULT_MODEL,
-                tokens=None,
-                detected_risk=student.current_risk_level.value,
-                audit_detail=f"Consulta fuera de alcance (LLM) estudiante {student.id}: {data.question[:120]}",
-                latency_ms=int((time.perf_counter() - started) * 1000),
-            )
-            yield {
-                "type": "done",
-                "detected_risk_level": None,
-                "model": DEFAULT_MODEL,
-                "used_llm": False,
-                "intent": "off_topic",
-                "latency_ms": int((time.perf_counter() - started) * 1000),
-            }
-            return
-
         if not stop:
             if not head_done and head_buffer:
-                scope, risk = self._parse_control(head_buffer)
-                if scope == "fuera":
-                    answer = GUARD_RESPONSES["off_topic"]
-                    yield {"type": "meta", "sources": [], "intent": "off_topic"}
-                    yield {"type": "delta", "text": answer}
-                    await self._persist(
-                        current_user=current_user,
-                        student=student,
-                        question=data.question,
-                        answer=answer,
-                        context=messages[-1]["content"][:8000],
-                        model=DEFAULT_MODEL,
-                        tokens=None,
-                        detected_risk=student.current_risk_level.value,
-                        audit_detail=f"Consulta fuera de alcance (LLM) estudiante {student.id}: {data.question[:120]}",
-                        latency_ms=int((time.perf_counter() - started) * 1000),
-                    )
-                    yield {
-                        "type": "done",
-                        "detected_risk_level": None,
-                        "model": DEFAULT_MODEL,
-                        "used_llm": False,
-                        "intent": "off_topic",
-                        "latency_ms": int((time.perf_counter() - started) * 1000),
-                    }
-                    return
+                _, risk = self._parse_control(head_buffer)
                 leftover = self._strip_control_line(head_buffer)
                 if leftover:
                     if not meta_sent:
@@ -684,10 +689,10 @@ class RagService:
 
     @classmethod
     def _parse_control(cls, first_line: str) -> tuple[str, str | None]:
-        """Parse the CONTROL header. Returns (scope, risk).
+        """Parse the CONTROL header. Returns (legacy_scope, risk).
 
-        scope defaults to 'dentro' (safer: prefer answering a student query
-        over wrongly refusing) when the LLM omits the header.
+        Scope is ignored for refusal (student-scoped chat always answers).
+        Risk is used when present. Missing header → scope 'dentro', risk None.
         """
         scope_match = cls._SCOPE_RE.search(first_line)
         scope = scope_match.group(1).lower() if scope_match else "dentro"
@@ -731,6 +736,26 @@ class RagService:
         )
         attendance = {status: count for status, count in absence_result.all()}
 
+        attendance_by_subject_result = await self.session.execute(
+            select(
+                SubjectModel.name,
+                AttendanceModel.status,
+                func.count(AttendanceModel.id),
+            )
+            .join(CourseSubjectModel, CourseSubjectModel.id == AttendanceModel.course_subject_id)
+            .join(SubjectModel, SubjectModel.id == CourseSubjectModel.subject_id)
+            .where(
+                AttendanceModel.student_id == student.id,
+                AttendanceModel.attendance_date >= thirty_days_ago,
+            )
+            .group_by(SubjectModel.name, AttendanceModel.status)
+            .order_by(SubjectModel.name)
+        )
+        attendance_by_subject: dict[str, dict] = {}
+        for subject_name, status, count in attendance_by_subject_result.all():
+            bucket = attendance_by_subject.setdefault(subject_name, {})
+            bucket[status] = count
+
         alerts_result = await self.session.execute(
             select(AlertModel)
             .where(
@@ -763,6 +788,18 @@ class RagService:
             f"{attendance.get(AttendanceStatus.TARDANZA, 0)} tardanzas, "
             f"{attendance.get(AttendanceStatus.JUSTIFICADO, 0)} justificadas"
         )
+        if attendance_by_subject:
+            lines.append("Asistencia por asignatura (últimos 30 días):")
+            for subject_name, counts in attendance_by_subject.items():
+                lines.append(
+                    f"  - {subject_name}: "
+                    f"{counts.get(AttendanceStatus.AUSENTE, 0)} ausencias, "
+                    f"{counts.get(AttendanceStatus.TARDANZA, 0)} tardanzas, "
+                    f"{counts.get(AttendanceStatus.JUSTIFICADO, 0)} justificadas, "
+                    f"{counts.get(AttendanceStatus.PRESENTE, 0)} presentes"
+                )
+        else:
+            lines.append("Asistencia por asignatura (últimos 30 días): sin registros")
         if alerts:
             lines.append("Alertas activas:")
             for alert in alerts:
@@ -815,52 +852,212 @@ class RagService:
                 ActionPlanItemModel,
                 ActionPlanModel,
                 ActionPlanNormativeRefModel,
+                ActionPlanNoteModel,
             )
             from app.modules.cases.infrastructure.models import DeceCaseModel
             from app.shared.feature_flags import action_plans_enabled
 
             if action_plans_enabled():
-                case_row = await self.session.execute(
-                    select(DeceCaseModel)
+                # Misma lógica que ActionPlanService.get_active_for_student:
+                # buscar plan activo por estudiante (cualquier caso no eliminado).
+                plan_row = await self.session.execute(
+                    select(ActionPlanModel)
+                    .join(DeceCaseModel, DeceCaseModel.id == ActionPlanModel.case_id)
                     .where(
                         DeceCaseModel.student_id == student.id,
                         DeceCaseModel.institution_id == student.institution_id,
                         DeceCaseModel.deleted_at.is_(None),
-                        DeceCaseModel.status.in_(["open", "under_assessment"]),
+                        ActionPlanModel.status == "active",
                     )
-                    .order_by(DeceCaseModel.id.desc())
+                    .order_by(ActionPlanModel.version.desc(), ActionPlanModel.id.desc())
                     .limit(1)
                 )
-                case = case_row.scalar_one_or_none()
-                active_plan = None
-                if case is not None:
-                    plan_row = await self.session.execute(
+                active_plan = plan_row.scalar_one_or_none()
+                if active_plan is None:
+                    draft_row = await self.session.execute(
                         select(ActionPlanModel)
+                        .join(DeceCaseModel, DeceCaseModel.id == ActionPlanModel.case_id)
                         .where(
-                            ActionPlanModel.case_id == case.id,
-                            ActionPlanModel.status == "active",
+                            DeceCaseModel.student_id == student.id,
+                            DeceCaseModel.institution_id == student.institution_id,
+                            DeceCaseModel.deleted_at.is_(None),
+                            ActionPlanModel.status.in_(("draft", "pending_approval")),
                         )
-                        .order_by(ActionPlanModel.version.desc())
+                        .order_by(ActionPlanModel.id.desc())
                         .limit(1)
                     )
-                    active_plan = plan_row.scalar_one_or_none()
-                if active_plan is None:
-                    lines.append("  - No hay plan de atención activo para este estudiante")
+                    draft_plan = draft_row.scalar_one_or_none()
+                    if draft_plan is not None:
+                        lines.append(
+                            f"  - No hay plan ACTIVO. Existe borrador id={draft_plan.id} "
+                            f"estado={draft_plan.status} (aún no aprobado/activado)."
+                        )
+                    else:
+                        lines.append("  - No hay plan de atención activo para este estudiante")
                 else:
                     lines.append(
-                        f"  - Plan id={active_plan.id} v{active_plan.version} tipo={active_plan.plan_type} "
-                        f"objetivo=\"{active_plan.general_objective[:240]}\""
+                        f"  - HAY PLAN ACTIVO EN MARCHA: id={active_plan.id} "
+                        f"caso_id={active_plan.case_id} v{active_plan.version} "
+                        f"tipo={active_plan.plan_type} "
+                        f"objetivo=\"{(active_plan.general_objective or '')[:240]}\""
                     )
+                    if active_plan.review_at_hint:
+                        lines.append(
+                            f"  - Próxima revisión sugerida: {active_plan.review_at_hint}"
+                        )
+                    # Activación / creación del plan (nivel plan, no acción)
+                    creator = await self.session.get(UserModel, active_plan.created_by)
+                    creator_name = (
+                        f"{creator.first_name} {creator.last_name}".strip()
+                        if creator
+                        else f"usuario_id={active_plan.created_by}"
+                    )
+                    created_at = (
+                        active_plan.created_at.strftime("%Y-%m-%d %H:%M")
+                        if active_plan.created_at
+                        else "—"
+                    )
+                    lines.append(
+                        f"  - Plan creado por: {creator_name} el {created_at}"
+                    )
+                    if active_plan.approved_by or active_plan.approved_at:
+                        approver = (
+                            await self.session.get(UserModel, active_plan.approved_by)
+                            if active_plan.approved_by
+                            else None
+                        )
+                        approver_name = (
+                            f"{approver.first_name} {approver.last_name}".strip()
+                            if approver
+                            else (
+                                f"usuario_id={active_plan.approved_by}"
+                                if active_plan.approved_by
+                                else "—"
+                            )
+                        )
+                        approved_at = (
+                            active_plan.approved_at.strftime("%Y-%m-%d %H:%M")
+                            if active_plan.approved_at
+                            else "—"
+                        )
+                        lines.append(
+                            f"  - Plan activado/aprobado por: {approver_name} el {approved_at}"
+                        )
+                        if active_plan.approval_comment:
+                            lines.append(
+                                f"  - Comentario de activación: {active_plan.approval_comment[:240]}"
+                            )
+
                     items = await self.session.execute(
                         select(ActionPlanItemModel)
                         .where(ActionPlanItemModel.plan_id == active_plan.id)
                         .order_by(ActionPlanItemModel.priority)
                     )
-                    for item in items.scalars().all():
-                        lines.append(
-                            f"    · Acción [{item.status}] p{item.priority}: {item.title} "
-                            f"(rol={item.responsible_role}; due_hint={item.due_hint or '—'})"
+                    item_rows = list(items.scalars().all())
+                    status_es = {
+                        "pending": "pendiente (no reportada)",
+                        "in_progress": "en progreso",
+                        "reported_completed": "reportada (pendiente validación DECE)",
+                        "validated": "validada/aprobada por DECE",
+                    }
+                    note_kind_es = {
+                        "progress_report": "reporte_de_avance",
+                        "validation_approved": "validacion_aprobada",
+                        "validation_rejected": "validacion_rechazada",
+                        "manual": "nota_manual",
+                    }
+                    counts = {
+                        "pending": 0,
+                        "in_progress": 0,
+                        "reported_completed": 0,
+                        "validated": 0,
+                    }
+                    for item in item_rows:
+                        counts[item.status] = counts.get(item.status, 0) + 1
+                    lines.append(
+                        "  - RESUMEN DE AVANCE DEL PLAN (usar esto si preguntan reportadas/aprobadas/"
+                        "pendientes/vigentes): "
+                        f"pendientes={counts.get('pending', 0)}; "
+                        f"en_progreso={counts.get('in_progress', 0)}; "
+                        f"reportadas_sin_validar={counts.get('reported_completed', 0)}; "
+                        f"validadas_aprobadas={counts.get('validated', 0)}. "
+                        "NO confundir con ACCIONES EJECUTADAS de alertas."
+                    )
+
+                    notes_result = await self.session.execute(
+                        select(ActionPlanNoteModel)
+                        .where(ActionPlanNoteModel.plan_id == active_plan.id)
+                        .order_by(
+                            ActionPlanNoteModel.created_at.asc(),
+                            ActionPlanNoteModel.id.asc(),
                         )
+                    )
+                    notes = list(notes_result.scalars().all())
+                    author_ids = {n.author_id for n in notes}
+                    authors: dict[int, str] = {}
+                    for uid in author_ids:
+                        user = await self.session.get(UserModel, uid)
+                        if user:
+                            authors[uid] = f"{user.first_name} {user.last_name}".strip()
+                        else:
+                            authors[uid] = f"usuario_id={uid}"
+
+                    notes_by_item: dict[int | None, list] = {}
+                    for note in notes:
+                        notes_by_item.setdefault(note.item_id, []).append(note)
+
+                    lines.append(
+                        "  - DETALLE DE ACCIONES (incluye autor/fecha de reporte y validación si existen notas):"
+                    )
+                    for item in item_rows:
+                        due_bit = item.due_hint or "—"
+                        if item.due_at:
+                            due_bit = (
+                                f"{due_bit}; fecha_limite={item.due_at.date().isoformat()}"
+                            )
+                        label = status_es.get(item.status, item.status)
+                        lines.append(
+                            f"    · item_id={item.id} [{item.status} = {label}] p{item.priority}: "
+                            f"\"{item.title}\" (responsable_rol={item.responsible_role}; "
+                            f"plazo={due_bit}; progreso_validado={item.progress_pct_validated}%)"
+                        )
+                        if item.objective:
+                            lines.append(f"      objetivo: {item.objective[:220]}")
+                        item_notes = notes_by_item.get(item.id) or []
+                        if not item_notes:
+                            lines.append(
+                                "      bitácora: sin notas de reporte ni validación registradas"
+                            )
+                            continue
+                        for note in item_notes:
+                            kind = note_kind_es.get(note.note_kind or "", note.note_kind or "nota")
+                            when = (
+                                note.created_at.strftime("%Y-%m-%d %H:%M")
+                                if note.created_at
+                                else "—"
+                            )
+                            author = authors.get(note.author_id, f"usuario_id={note.author_id}")
+                            excerpt = (note.text or "").strip().replace("\n", " ")[:280]
+                            lines.append(
+                                f"      bitácora [{kind}] por {author} el {when}: \"{excerpt}\""
+                            )
+
+                    plan_level_notes = notes_by_item.get(None) or []
+                    if plan_level_notes:
+                        lines.append("  - Notas generales del plan (sin acción asociada):")
+                        for note in plan_level_notes:
+                            kind = note_kind_es.get(note.note_kind or "", note.note_kind or "nota")
+                            when = (
+                                note.created_at.strftime("%Y-%m-%d %H:%M")
+                                if note.created_at
+                                else "—"
+                            )
+                            author = authors.get(note.author_id, f"usuario_id={note.author_id}")
+                            excerpt = (note.text or "").strip().replace("\n", " ")[:280]
+                            lines.append(
+                                f"    · [{kind}] por {author} el {when}: \"{excerpt}\""
+                            )
+
                     refs = await self.session.execute(
                         select(ActionPlanNormativeRefModel).where(
                             ActionPlanNormativeRefModel.plan_id == active_plan.id
@@ -1236,187 +1433,13 @@ class RagService:
 
     @staticmethod
     def _question_focus(question: str) -> str:
-        q = question.lower()
-        if any(k in q for k in ("agresiv", "bullying", "conflicto", "pelea", "violencia", "incumplimiento")):
-            return (
-                "Pregunta sobre agresividad, conflictos o incumplimiento de normas. "
-                "Responde SOLO con lo que conste en el detalle de reportes/disciplinarios. "
-                "Conducta problemática en aula NO es agresividad. Diferencia explícitamente. "
-                "Sin recomendaciones salvo que pidan qué hacer."
-            )
-        if any(
-            k in q
-            for k in (
-                "empeor",
-                "mejor",
-                "estable",
-                "escalamiento",
-                "efecto positivo",
-                "efecto negativo",
-                "evolución",
-                "evolucion",
-                "qué cambió",
-                "que cambió",
-                "que cambio",
-                "qué cambio",
-                "cambió respecto",
-                "cambio respecto",
-                "últimos 30",
-                "ultimos 30",
-                "últimas semanas",
-                "ultimas semanas",
-            )
-        ):
-            return (
-                "Pregunta de COMPARACIÓN TEMPORAL o efecto de intervención. "
-                "Lee 'NOTA COMPARATIVA TEMPORAL' y la cronología. "
-                "Si no hay registros antes Y después, NO afirmes mejora, empeoramiento, estabilidad "
-                "ni ausencia de efecto. Usa: 'no consta evidencia posterior suficiente para...'. "
-                "NO incluyas 'Qué hacer ahora' salvo que la pregunta lo pida."
-            )
-        if any(
-            k in q
-            for k in (
-                "mixto",
-                "académico o conductual",
-                "academico o conductual",
-                "conductual o emocional",
-                "tipo de caso",
-                "factores de riesgo",
-                "por qué está en",
-                "por que está en",
-                "por qué riesgo",
-                "por que riesgo",
-            )
-        ):
-            return (
-                "Clasifica el caso por dimensión con encabezados o viñetas: "
-                "Académico | Asistencia | Conductual | Emocional/social | Alertas activas. "
-                "Cita el dato concreto de cada dimensión. Sin recomendaciones si no las piden."
-            )
-        if any(k in q for k in ("entrevista", "preparar", "convocar", "preguntas para")):
-            return (
-                "El DECE quiere preparar una entrevista. Responde directo y añade una sección "
-                "'### Preguntas sugeridas' con 4-6 preguntas basadas en los reportes y anotaciones "
-                "documentados. Si la entrevista ya está agendada, dilo y enfoca las preguntas en eso."
-            )
-        # Operativo / futuro / decisión — tiene prioridad sobre "acciones ya realizadas".
-        operational_markers = (
-            "deber",
-            "debería",
-            "deberia",
-            "deben",
-            "debo ",
-            "se debe",
-            "hay que",
-            "tengo que",
-            "qué hago",
-            "que hago",
-            "qué hacer",
-            "que hacer",
-            "cómo intervenir",
-            "como intervenir",
-            "siguiente paso",
-            "próximo paso",
-            "proximo paso",
-            "próximos pasos",
-            "proximos pasos",
-            "qué medidas",
-            "que medidas",
-            "recomiend",
-            "sugier",
-            "cómo procedo",
-            "como procedo",
-            "decidir hoy",
-            "información relevante para decidir",
-            "esta semana",
-            "próxima semana",
-            "proxima semana",
-            "priorizar",
-            "priorizo",
-            "prioriza",
-            "priorice",
-            "tomar esta",
-            "acciones a tomar",
-        )
-        if any(k in q for k in operational_markers):
-            base = (
-                "Pregunta OPERATIVA: el DECE necesita decidir/actuar. Estructura la respuesta así:\n"
-                "1) Frase directa con la decisión o acción principal.\n"
-                "### Evidencia relevante — reportes DECE, anotaciones de tutor, notas, asistencia y riesgo, "
-                "con fecha. AQUÍ van las observaciones y reportes (p. ej. 'observación conductual', "
-                "'alerta emocional'), que son evidencia, NO acciones ejecutadas.\n"
-                "### Acciones ya realizadas — ÚNICAMENTE intervenciones efectivamente ejecutadas por el DECE, "
-                "es decir 'ACCIONES EJECUTADAS'/alertas atendidas con su fecha (p. ej. citación al "
-                "representante, entrevista realizada). NO incluyas aquí reportes ni observaciones. "
-                "Si no hay ninguna acción ejecutada, escribe 'No constan acciones ejecutadas registradas'. "
-                "No repitas la misma acción.\n"
-                "### Acciones recomendadas — pasos concretos y accionables del ámbito DECE "
-                "(confirmar si la entrevista/citación agendada se realizó y su resultado; entrevista "
-                "exploratoria con la estudiante; observación conductual en aula; seguimiento con el tutor; "
-                "contacto con el representante; derivación si excede el ámbito escolar; registrar acuerdos, "
-                "responsable y fecha). NADA de 'evaluación adicional' o 'monitorear' genéricos. "
-                "No repitas una acción que ya esté en 'Acciones ya realizadas'.\n"
-                "Cierra con el límite: 'No consta evidencia posterior suficiente para afirmar "
-                "mejora/empeoramiento/efecto'. NO digas que un plan fue 'implementado' si no consta; "
-                "di 'verifica si se ejecutó y registra evidencia'."
-            )
-            if any(k in q for k in ("priorizar", "priorizo", "prioriza", "priorice", "prioridad")):
-                base = (
-                    "Pregunta de PRIORIZACIÓN: PRIMERO responde 'Sí' o 'No' con criterio DECE "
-                    "(p. ej. 'Sí, priorizar para seguimiento, no como emergencia inmediata porque…'). "
-                    "Luego justifica con evidencia y qué verificar hoy. " + base
-                )
-            return base
-        if any(k in q for k in ("accion", "acciones", "tomado", "tomada", "intervencion", "intervención", "efecto")):
-            return (
-                "Pregunta por acciones YA realizadas o su efecto. "
-                "Enumera SOLO desde 'ACCIONES EJECUTADAS' (alertas atendidas), con fecha. Los reportes DECE "
-                "son evidencia, no acciones ejecutadas; su 'plan=' es lo propuesto, no lo realizado. "
-                "Para efecto: si no hay registro posterior, di 'no consta evidencia que permita "
-                "confirmar efecto positivo o negativo'. No afirmes que 'no funcionó'."
-            )
-        if any(k in q for k in ("cambio", "emocional", "últimas", "ultimas", "recient", "tendencia")):
-            return (
-                "Pregunta sobre cambio o señales recientes. Usa cronología y NOTA COMPARATIVA. "
-                "Compara fechas; si solo hay eventos de hace semanas, dilo. "
-                "No afirmes estabilidad sin evidencia posterior."
-            )
-        if any(k in q for k in ("situación", "situacion", "resumen", "integral", "panorama")):
-            return (
-                "Panorama integral: 1 frase de síntesis, luego dimensión por dimensión "
-                "(académico, asistencia, conductual, emocional) con fechas de los reportes. "
-                "Recomendaciones solo si aportan en 1-2 líneas al final."
-            )
-        if any(k in q for k in ("riesgo", "urgente", "urgencia", "deserción", "desercion")):
-            return (
-                "Prioriza factores de riesgo por dimensión y urgencia. "
-                "Separa académico / conductual / emocional / asistencia."
-            )
-        if any(k in q for k in ("anotacion", "anotación", "anotaciones")):
-            return (
-                "Pregunta sobre ANOTACIONES DE TUTOR. Enumera cada anotación con fecha, tipo y texto "
-                "tal como consta en 'ANOTACIONES TUTOR (PostgreSQL)'. "
-                "NO respondas con promedio, materias ni calificaciones."
-            )
-        if any(k in q for k in ("reporte", "reportes")):
-            return (
-                "Pregunta sobre REPORTES DECE. Enumera cada reporte con tipo, fecha, urgencia y "
-                "descripción según el bloque 'REPORTES DECE'. "
-                "No confundas reportes con acciones ya ejecutadas."
-            )
-        if any(k in q for k in ("asistencia", "ausencia", "falta", "tardanza")):
-            return "Enfócate en asistencia con cifras de 30 días; no infieras causas sin registro."
-        if any(k in q for k in ("materia", "nota", "calificacion", "calificación", "promedio")):
-            return "Rendimiento académico por materia; 7/10 no es crisis si el promedio general es alto."
-        if any(k in q for k in ("aislamiento", "retraimiento", "participación", "participacion")):
-            return (
-                "Enfócate en señales emocionales/sociales documentadas. "
-                "Participación solo si consta en anotaciones o reportes."
-            )
-        if any(k in q for k in ("señal", "senal", "emocional", "preocupante")):
-            return "Señales emocionales: cita reportes DECE y tutor sin diagnosticar."
-        return "Responde de forma específica y breve a la pregunta. No agregues recomendaciones si no las piden."
+        """Compat shim: prefer IntentPolicy via classify_intent/_build_messages."""
+        from app.modules.rag.application.intent import RagIntent, policy_for, score_intent
+
+        intent, score = score_intent(question)
+        if score <= 0:
+            intent = RagIntent.GENERAL
+        return f"INTENT={intent.value}\n{policy_for(intent).instruction}"
 
     @classmethod
     def _extract_risk(cls, answer: str) -> str | None:

@@ -16,6 +16,7 @@ from app.modules.rag.api.router import router as rag_router
 from app.modules.reports.api.router import router as reports_router
 from app.modules.students.api.router import router as students_router
 from app.modules.users.api.router import router as users_router
+from app.modules.superadmin.api.router import router as superadmin_router
 
 api_router = APIRouter()
 
@@ -33,3 +34,4 @@ api_router.include_router(action_plans_router, prefix="/action-plans", tags=["ac
 api_router.include_router(notifications_router, prefix="/notifications", tags=["notifications"])
 api_router.include_router(audit_router, prefix="/audit", tags=["audit"])
 api_router.include_router(reports_router, prefix="/reports", tags=["reports"])
+api_router.include_router(superadmin_router, prefix="/superadmin", tags=["superadmin"])

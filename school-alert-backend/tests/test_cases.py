@@ -121,3 +121,33 @@ async def test_cross_tenant_case_forbidden(client: AsyncClient, world: TenantWor
         headers=world.auth(world.dece_a_id, UserRole.DECE),
     )
     assert resp.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_soft_delete_case_hides_from_list(client: AsyncClient, world: TenantWorld):
+    created = await client.post(
+        "/api/v1/cases",
+        headers=world.auth(world.dece_a_id, UserRole.DECE),
+        json={
+            "student_id": world.student_a_id,
+            "title": "Caso a eliminar",
+            "alert_ids": [],
+        },
+    )
+    assert created.status_code == 201, created.text
+    case_id = created.json()["id"]
+
+    deleted = await client.post(
+        f"/api/v1/cases/{case_id}/discard",
+        headers=world.auth(world.dece_a_id, UserRole.DECE),
+    )
+    assert deleted.status_code == 200, deleted.text
+    assert deleted.json()["status"] == "discarded"
+
+    listed = await client.get(
+        "/api/v1/cases",
+        headers=world.auth(world.dece_a_id, UserRole.DECE),
+        params={"student_id": world.student_a_id},
+    )
+    assert listed.status_code == 200
+    assert all(row["id"] != case_id for row in listed.json())

@@ -8,7 +8,6 @@ STAFF_ROLES = {
     UserRole.DECE,
     UserRole.TUTOR,
     UserRole.DOCENTE,
-    UserRole.INSPECTOR,
     UserRole.REPRESENTANTE,
 }
 

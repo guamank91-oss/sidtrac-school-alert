@@ -5,12 +5,16 @@ __pycache__/
 .mypy_cache/
 .venv/
 venv/
-.env
 *.egg-info/
 dist/
 build/
 
-# Node
+# Environment variables (keep only .env.example)
+.env
+.env.*
+!.env.example
+
+# Node / Frontend
 node_modules/
 dist/
 .vite/
@@ -19,6 +23,12 @@ dist/
 school-alert-backend/chroma_data/
 **/uploads/
 **/*.db
+
+# Local one-off debug scripts
+school-alert-backend/scripts/check_margarita.py
+school-alert-backend/scripts/inspect_db.py
+school-alert-backend/scripts/list_users.py
+school-alert-backend/scripts/test_db.py
 
 # IDE / OS
 .idea/

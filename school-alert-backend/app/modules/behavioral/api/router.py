@@ -33,7 +33,6 @@ BehavioralReader = Depends(
         UserRole.ADMINISTRADOR,
         UserRole.DECE,
         UserRole.TUTOR,
-        UserRole.INSPECTOR,
     )
 )
 TimelineReader = Depends(
@@ -41,7 +40,6 @@ TimelineReader = Depends(
         UserRole.ADMINISTRADOR,
         UserRole.DECE,
         UserRole.TUTOR,
-        UserRole.INSPECTOR,
         UserRole.REPRESENTANTE,
     )
 )
@@ -250,3 +248,60 @@ async def student_timeline(
         return await BehavioralService(session).student_timeline(current_user, student_id)
     except DomainError as exc:
         raise _handle(exc) from exc
+
+
+@router.post("/dictate-transcribe")
+async def process_dece_dictation(
+    payload: dict,
+    current_user: CurrentUser = DeceWriter,
+):
+    """Voice AI dictation assistant for DECE: converts raw audio dictation text into structured findings & action plan tasks."""
+    raw_text = payload.get("raw_text", "").strip()
+    if not raw_text:
+        raise HTTPException(status_code=400, detail="Se requiere el texto dictado por voz")
+
+    from app.modules.rag.application.openrouter import ask_openrouter
+
+    prompt = f"""
+Eres un Asistente Profesional Psicopedagógico experto en el DECE de Ecuador.
+Analiza este dictado verbal realizado por un profesional del DECE durante una sesión de acompañamiento:
+
+DICTADO BRUTO:
+"{raw_text}"
+
+INSTRUCCIÓN ESPECIAL: Si el dictado contiene palabras repetidas o tartamudeo generado por la transcripción del micrófono (por ejemplo: "el el estudiante el estudiante Kevin alfo Kevin Alfonso"), LIMPIA y DEDUPLICA el texto primero para entender la intención clínica real.
+
+Genera una respuesta en formato JSON estructurado con estas claves EXACTAS:
+- "resumen_hallazgos": Breve resumen profesional y redactado limpiamente de los aspectos emocionales/conductuales.
+- "nivel_riesgo_sugerido": Uno entre "bajo", "medio", "alto", "critico".
+- "objetivo_plan_accion": Un objetivo general redactado profesionalmente para el Plan de Acción DECE.
+- "compromisos_sugeridos": Lista de 3 tareas/compromisos concretos (cada uno con "titulo", "descripcion", "responsable" que puede ser "DECE", "Tutor", "Representante", "Estudiante").
+
+Responde ÚNICAMENTE en JSON válido.
+"""
+    try:
+        response_text = await ask_openrouter(
+            prompt=prompt,
+            system_prompt="Eres un asistente especializado en psicología escolar y normativas DECE del Ecuador. Responde únicamente en JSON.",
+        )
+        import json
+        clean_json = response_text.replace("```json", "").replace("```", "").strip()
+        parsed = json.loads(clean_json)
+        return {"status": "success", "dictation": raw_text, "structured_data": parsed}
+    except Exception as err:
+        # Fallback structured parsing if AI is unreachable
+        return {
+            "status": "fallback",
+            "dictation": raw_text,
+            "structured_data": {
+                "resumen_hallazgos": raw_text[:200],
+                "nivel_riesgo_sugerido": "medio",
+                "objetivo_plan_accion": "Brindar acompañamiento emocional y seguimiento académico continuo.",
+                "compromisos_sugeridos": [
+                    {"titulo": "Sesión individual DECE", "descripcion": "Entrevista semanal de seguimiento emocional.", "responsable": "DECE"},
+                    {"titulo": "Control de tareas en casa", "descripcion": "Revisión diaria del cuaderno de tareas.", "responsable": "Representante"},
+                    {"titulo": "Reporte semanal del Tutor", "descripcion": "Informar novedades conductuales al DECE.", "responsable": "Tutor"},
+                ],
+            },
+        }
+

@@ -102,3 +102,36 @@ async def mark_all_notifications_read(
     session: AsyncSession = Depends(get_db),
 ):
     await NotificationService(session).mark_all_read(current_user)
+
+
+@router.post("/whatsapp/send")
+async def send_whatsapp_notification(
+    payload: dict,
+    current_user: CurrentUser = AnyUser,
+    session: AsyncSession = Depends(get_db),
+):
+    """Sends automated or manual WhatsApp notification to guardian."""
+    from app.modules.notifications.application.whatsapp_service import WhatsAppService
+
+    phone = payload.get("guardian_phone", "").strip()
+    guardian_name = payload.get("guardian_name", "Representante")
+    student_name = payload.get("student_name", "Estudiante")
+    risk_level = payload.get("risk_level", "alto")
+
+    if not phone:
+        raise HTTPException(status_code=400, detail="Número de teléfono del apoderado requerido")
+
+    result = await WhatsAppService.send_parent_alert(
+        guardian_phone=phone,
+        guardian_name=guardian_name,
+        student_name=student_name,
+        risk_level=risk_level,
+    )
+    await record_audit(
+        session,
+        user_id=current_user.id,
+        action="envio_whatsapp",
+        detail=f"Notificación WhatsApp enviada a {phone} para el estudiante {student_name}",
+        commit=True,
+    )
+    return result

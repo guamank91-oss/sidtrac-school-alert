@@ -27,10 +27,17 @@ class ValidationError(DomainError):
         super().__init__(message, code="validation_error")
 
 
+class ConflictError(DomainError):
+    def __init__(self, message: str):
+        super().__init__(message, code="conflict")
+
+
 def http_status_for(exc: DomainError) -> int:
     return {
         "not_found": 404,
         "unauthorized": 401,
         "forbidden": 403,
+        "conflict": 409,
         "AI_PROVIDER_DISABLED": 503,
+        "AI_GENERATION_FAILED": 503,
     }.get(exc.code, 400)

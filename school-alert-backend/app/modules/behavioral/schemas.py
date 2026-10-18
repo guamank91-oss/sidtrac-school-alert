@@ -81,7 +81,7 @@ class DisciplinaryReportResponse(BaseModel):
     student_id: int
     student_name: str
     course_name: str
-    inspector_id: int
+    tutor_id: int
     author_name: str
     fault_type: FaultType
     description: str

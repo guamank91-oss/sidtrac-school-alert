@@ -28,7 +28,6 @@ AlertReader = Depends(
         UserRole.ADMINISTRADOR,
         UserRole.DECE,
         UserRole.TUTOR,
-        UserRole.INSPECTOR,
     )
 )
 AlertManager = Depends(require_roles(UserRole.ADMINISTRADOR, UserRole.DECE))

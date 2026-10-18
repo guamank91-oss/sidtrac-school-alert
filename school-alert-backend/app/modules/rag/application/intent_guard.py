@@ -5,7 +5,8 @@ import unicodedata
 
 # Único atajo determinista: saludos / cortesía puros, sin pregunta.
 # Set cerrado y muy frecuente => se resuelve sin gastar una llamada al LLM.
-# TODO el resto del control de alcance lo decide el LLM vía header CONTROL.
+# Con estudiante seleccionado, el resto SIEMPRE llega al modelo; no hay corte
+# duro de "fuera de alcance" por keywords ni por header CONTROL.
 _GREETING_ONLY = re.compile(
     r"^(?:"
     r"hola+|holaa+|hey+|hi+|hello+|"
@@ -31,8 +32,7 @@ def classify_question_intent(question: str) -> str:
     Clasificación mínima y barata (solo lo determinista):
       - greeting   -> saludo puro, se responde con plantilla sin LLM.
       - too_vague  -> mensaje vacío.
-      - student_query -> TODO lo demás. El alcance real (dentro/fuera) lo
-        decide el LLM en el header CONTROL de su respuesta.
+      - student_query -> todo lo demás llega al modelo (sin rechazo por keywords).
     """
     raw = question.strip()
     if not raw:
@@ -55,9 +55,9 @@ GUARD_RESPONSES: dict[str, str] = {
         "Usa una pregunta sugerida o escribe tu consulta en español."
     ),
     "off_topic": (
-        "Solo puedo responder consultas relacionadas con el **seguimiento del estudiante** "
-        "(rendimiento académico, asistencia, conducta, alertas e intervención del DECE).\n\n"
-        "Reformula tu pregunta sobre el estudiante seleccionado o elige una de las sugeridas."
+        "Puedo ayudarte con el expediente de este estudiante "
+        "(asistencia, rendimiento, conducta, alertas e intervención del DECE). "
+        "¿Qué aspecto quieres revisar?"
     ),
     "too_vague": (
         "Tu mensaje es muy breve o no indica qué aspecto del estudiante quieres analizar.\n\n"

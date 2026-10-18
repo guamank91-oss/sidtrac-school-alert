@@ -252,6 +252,66 @@ class CaseService:
             notes=ref.notes,
         )
 
+    async def soft_delete_case(
+        self,
+        current_user: CurrentUser,
+        case_id: int,
+        *,
+        reason: str = "Eliminado desde Perfil 360",
+    ) -> CaseResponse:
+        """Soft-delete a DECE case and discard linked draft/pending/active plans."""
+        self._ensure_module()
+        require_capability(current_user, CASE_VIEW_PROFESSIONAL)
+        case = await self._get_case(current_user, case_id)
+        if case.legal_hold:
+            raise ValidationError("Este caso está en retención legal y no se puede eliminar")
+
+        now = datetime.now(timezone.utc)
+        case.deleted_at = now
+        case.deletion_reason = reason
+        case.status = "discarded"
+        case.closed_at = now
+        case.updated_at = now
+
+        # Discard linked plans so nothing remains "active" for the student.
+        from app.modules.action_plans.infrastructure.models import ActionPlanModel
+
+        plans = await self.session.execute(
+            select(ActionPlanModel).where(
+                ActionPlanModel.case_id == case.id,
+                ActionPlanModel.status.in_(("draft", "pending_approval", "active")),
+            )
+        )
+        for plan in plans.scalars().all():
+            plan.status = "discarded"
+
+        await record_audit(
+            self.session,
+            user_id=current_user.id,
+            institution_id=case.institution_id,
+            scope_type="institution",
+            action="case_soft_deleted",
+            entity_type="dece_case",
+            entity_id=case.id,
+            detail=reason,
+            categories='["case"]',
+        )
+        await self.session.commit()
+        # Return snapshot before list filters hide deleted cases
+        return CaseResponse(
+            id=case.id,
+            institution_id=case.institution_id,
+            student_id=case.student_id,
+            status=case.status,
+            title=case.title,
+            opening_summary=case.opening_summary,
+            opened_by=case.opened_by,
+            alert_ids=[],
+            triage=None,
+            created_at=case.created_at,
+            professional_view=True,
+        )
+
     async def _get_case(self, current_user: CurrentUser, case_id: int) -> DeceCaseModel:
         case = await self.session.get(DeceCaseModel, case_id)
         if case is None or case.deleted_at is not None:

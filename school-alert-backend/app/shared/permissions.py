@@ -47,7 +47,6 @@ def has_capability(user: CurrentUser, capability: str) -> bool:
         return role in {
             UserRole.ADMINISTRADOR,
             UserRole.DECE,
-            UserRole.INSPECTOR,
         } or user.id in allow
 
     if capability == CASE_VIEW_ASSIGNED_ACTIONS:
@@ -55,7 +54,6 @@ def has_capability(user: CurrentUser, capability: str) -> bool:
             UserRole.DECE,
             UserRole.TUTOR,
             UserRole.DOCENTE,
-            UserRole.INSPECTOR,
             UserRole.ADMINISTRADOR,
         }
 

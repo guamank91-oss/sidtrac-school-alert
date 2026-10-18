@@ -64,6 +64,8 @@ class StudentService:
             query = query.where(StudentModel.current_risk_level == risk_level)
         if status:
             query = query.where(StudentModel.status == status)
+        else:
+            query = query.where(StudentModel.status == StudentStatus.ACTIVO)
         if search:
             term = f"%{search.strip().lower()}%"
             query = query.where(
@@ -210,9 +212,6 @@ class StudentService:
         if current_user.active_role == UserRole.REPRESENTANTE:
             if student.guardian_id != current_user.id:
                 raise ForbiddenError("You can only view your assigned children")
-            return
-        if current_user.active_role == UserRole.INSPECTOR:
-            # Institution-scoped read without course assignment (summary later).
             return
         raise ForbiddenError("Insufficient permissions to view this student")
 

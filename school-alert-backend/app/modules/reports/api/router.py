@@ -109,3 +109,66 @@ async def export_csv(
         media_type="text/csv; charset=utf-8",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+@router.get("/action-plans/{plan_id}/pdf-html")
+async def get_action_plan_official_pdf_html(
+    plan_id: int,
+    current_user: CurrentUser = ReportReader,
+    session: AsyncSession = Depends(get_db),
+):
+    """Generate printable HTML/PDF of official DECE Action Plan with institutional header, LOEI articles, and signature blocks."""
+    from app.modules.action_plans.infrastructure.models import (
+        ActionPlanItemModel,
+        ActionPlanModel,
+        ActionPlanNormativeRefModel,
+    )
+    from app.modules.cases.infrastructure.models import DeceCaseModel
+    from app.modules.institution.infrastructure.models import CourseModel, InstitutionModel
+    from app.modules.normative.infrastructure.models import NormativeArticleModel
+    from app.modules.reports.application.pdf_generator import generate_official_action_plan_html
+    from app.modules.students.infrastructure.models import StudentModel
+    from app.modules.users.infrastructure.models import UserModel
+    from sqlalchemy import select
+
+    plan = await session.get(ActionPlanModel, plan_id)
+    if not plan:
+        raise HTTPException(status_code=404, detail="Plan de acción no encontrado")
+
+    case = await session.get(DeceCaseModel, plan.case_id)
+    student = await session.get(StudentModel, case.student_id) if case else None
+    institution = await session.get(InstitutionModel, current_user.institution_id) if current_user.institution_id else None
+    course = await session.get(CourseModel, student.course_id) if student and student.course_id else None
+
+    items = (
+        await session.execute(
+            select(ActionPlanItemModel).where(ActionPlanItemModel.plan_id == plan_id)
+        )
+    ).scalars().all()
+
+    norm_refs = (
+        await session.execute(
+            select(NormativeArticleModel)
+            .join(ActionPlanNormativeRefModel, ActionPlanNormativeRefModel.article_id == NormativeArticleModel.id)
+            .where(ActionPlanNormativeRefModel.plan_id == plan_id)
+        )
+    ).scalars().all()
+
+    user_obj = await session.get(UserModel, current_user.id)
+    psychologist_name = f"{user_obj.first_name} {user_obj.last_name}" if user_obj else "Psicólogo DECE"
+
+    html = generate_official_action_plan_html(
+        institution_name=institution.name if institution else "UNIDAD EDUCATIVA",
+        student_name=f"{student.first_name} {student.last_name}" if student else "Estudiante",
+        course_name=course.name if course else "N/A",
+        national_id=student.national_id or "" if student else "",
+        plan_title=f"Plan de Acción v{plan.version}",
+        general_objective=plan.general_objective or "Acompañamiento psicopedagógico integral.",
+        tasks=[{"title": item.title, "description": item.description, "responsible_role": item.responsible_role, "status": item.status} for item in items],
+        normative_articles=[{"article": art.article, "title": art.title, "body": art.body} for art in norm_refs],
+        created_at=plan.created_at,
+        psychologist_name=psychologist_name,
+    )
+
+    return Response(content=html, media_type="text/html; charset=utf-8")
+

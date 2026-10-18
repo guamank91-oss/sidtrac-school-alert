@@ -1,7 +1,7 @@
 from datetime import date, datetime
 from typing import Optional
 
-from sqlalchemy import Boolean, Date, DateTime, ForeignKey, String, Text, func
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
@@ -16,6 +16,10 @@ class InstitutionModel(Base):
     address: Mapped[Optional[str]] = mapped_column("direccion", Text)
     phone: Mapped[Optional[str]] = mapped_column("telefono", String(20))
     email: Mapped[Optional[str]] = mapped_column("correo", String(120))
+    status: Mapped[str] = mapped_column("estado_suscripcion", String(30), server_default="activa")
+    plan_tier: Mapped[str] = mapped_column("plan_tier", String(30), server_default="pro")
+    ai_token_count: Mapped[int] = mapped_column("conteo_tokens_ia", Integer, server_default="0")
+    logo_url: Mapped[Optional[str]] = mapped_column("logo_url", Text)
     created_at: Mapped[datetime] = mapped_column(
         "creado_en", DateTime(timezone=True), server_default=func.now()
     )

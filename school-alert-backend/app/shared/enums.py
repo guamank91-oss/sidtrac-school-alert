@@ -6,6 +6,7 @@ import enum
 class UserRole(str, enum.Enum):
     """Member names match PostgreSQL rol_usuario labels; .value is the API/DB semantic string."""
 
+    SUPERADMIN = "superadmin"
     ADMINISTRADOR = "administrador"
     DECE = "dece"
     TUTOR = "tutor"

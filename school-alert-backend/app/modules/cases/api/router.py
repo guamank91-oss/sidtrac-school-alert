@@ -31,7 +31,6 @@ ProtocolReporter = Depends(
         UserRole.DECE,
         UserRole.TUTOR,
         UserRole.DOCENTE,
-        UserRole.INSPECTOR,
     )
 )
 
@@ -85,6 +84,19 @@ async def confirm_triage(
 ):
     try:
         return await CaseService(session).confirm_triage(current_user, case_id, data)
+    except DomainError as exc:
+        raise _handle(exc) from exc
+
+
+@router.post("/{case_id}/discard", response_model=CaseResponse)
+async def discard_case(
+    case_id: int,
+    current_user: CurrentUser = CaseStaff,
+    session: AsyncSession = Depends(get_db),
+):
+    """Soft-delete: marca deleted_at y descarta planes vinculados."""
+    try:
+        return await CaseService(session).soft_delete_case(current_user, case_id)
     except DomainError as exc:
         raise _handle(exc) from exc
 

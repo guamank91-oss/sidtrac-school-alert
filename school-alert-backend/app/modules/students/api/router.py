@@ -22,7 +22,6 @@ StudentReader = Depends(
         UserRole.ADMINISTRADOR,
         UserRole.DECE,
         UserRole.TUTOR,
-        UserRole.INSPECTOR,
         UserRole.REPRESENTANTE,
     )
 )

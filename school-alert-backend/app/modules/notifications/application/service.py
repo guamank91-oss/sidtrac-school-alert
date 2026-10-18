@@ -7,6 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.alerts.infrastructure.models import AlertModel
+from app.modules.institution.infrastructure.models import CourseModel
 from app.modules.notifications.application.emailer import (
     build_alert_email_html,
     send_email_via_resend,
@@ -15,8 +16,9 @@ from app.modules.notifications.infrastructure.models import (
     EmailNotificationModel,
     InternalNotificationModel,
 )
+from app.modules.students.infrastructure.models import StudentModel
 from app.shared.auth_context import CurrentUser
-from app.shared.enums import EmailStatus
+from app.shared.enums import EmailStatus, UserRole
 from app.shared.exceptions import NotFoundError, ValidationError
 
 
@@ -85,34 +87,70 @@ class NotificationService:
         await self.session.refresh(notification)
         return notification
 
+    def _base_internal_query(self, current_user: CurrentUser):
+        """Scope inbox by active role (multi-role users share one user_id)."""
+        query = select(InternalNotificationModel).where(
+            InternalNotificationModel.user_id == current_user.id
+        )
+        role = current_user.active_role
+
+        if role == UserRole.REPRESENTANTE:
+            # Solo alertas de sus representados; no bandeja DECE/tutor del mismo usuario.
+            return (
+                query.join(AlertModel, AlertModel.id == InternalNotificationModel.alert_id)
+                .join(StudentModel, StudentModel.id == AlertModel.student_id)
+                .where(StudentModel.guardian_id == current_user.id)
+            )
+
+        if role == UserRole.TUTOR:
+            return (
+                query.join(AlertModel, AlertModel.id == InternalNotificationModel.alert_id)
+                .join(StudentModel, StudentModel.id == AlertModel.student_id)
+                .join(CourseModel, CourseModel.id == StudentModel.course_id)
+                .where(CourseModel.tutor_id == current_user.id)
+            )
+
+        if role == UserRole.DOCENTE:
+            # Docentes no reciben alertas institucionales internas en esta versión.
+            return query.where(InternalNotificationModel.id < 0)
+
+        # DECE / administrador: inbox completa del usuario en su institución.
+        return query
+
     async def list_internal(
         self, current_user: CurrentUser, unread_only: bool = False
     ) -> list[InternalNotificationModel]:
         query = (
-            select(InternalNotificationModel)
-            .where(InternalNotificationModel.user_id == current_user.id)
+            self._base_internal_query(current_user)
             .order_by(InternalNotificationModel.created_at.desc())
             .limit(50)
         )
         if unread_only:
             query = query.where(InternalNotificationModel.is_read.is_(False))
         result = await self.session.execute(query)
-        return list(result.scalars().all())
+        return list(result.scalars().unique().all())
 
     async def mark_read(self, current_user: CurrentUser, notification_id: int) -> None:
         notification = await self.session.get(InternalNotificationModel, notification_id)
         if notification is None or notification.user_id != current_user.id:
+            raise NotFoundError("Notification")
+        # Enforce role-scoped visibility (same rules as list).
+        visible = await self.session.execute(
+            self._base_internal_query(current_user).where(
+                InternalNotificationModel.id == notification_id
+            )
+        )
+        if visible.scalars().first() is None:
             raise NotFoundError("Notification")
         notification.is_read = True
         await self.session.commit()
 
     async def mark_all_read(self, current_user: CurrentUser) -> None:
         result = await self.session.execute(
-            select(InternalNotificationModel).where(
-                InternalNotificationModel.user_id == current_user.id,
+            self._base_internal_query(current_user).where(
                 InternalNotificationModel.is_read.is_(False),
             )
         )
-        for n in result.scalars().all():
+        for n in result.scalars().unique().all():
             n.is_read = True
         await self.session.commit()

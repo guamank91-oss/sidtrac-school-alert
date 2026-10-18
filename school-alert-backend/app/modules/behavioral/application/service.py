@@ -635,8 +635,6 @@ class BehavioralService:
 
         if current_user.active_role == UserRole.TUTOR:
             await self._ensure_tutor_student(student_id, current_user.id)
-        elif current_user.active_role == UserRole.INSPECTOR:
-            pass
         elif current_user.active_role in {UserRole.DECE, UserRole.ADMINISTRADOR}:
             pass
         elif current_user.active_role == UserRole.REPRESENTANTE:
@@ -734,7 +732,7 @@ class BehavioralService:
             student_id=row.student_id,
             student_name=student_name,
             course_name=course_name,
-            inspector_id=row.inspector_id,
+            tutor_id=row.inspector_id,
             author_name=await self._user_name(row.inspector_id),
             fault_type=row.fault_type,
             description=row.description,

@@ -145,6 +145,18 @@ async def activate_term(
         raise _handle_domain_error(exc) from exc
 
 
+@router.post("/terms/{term_id}/close", response_model=AcademicTermResponse)
+async def close_term(
+    term_id: int,
+    _: CurrentUser = AdminUser,
+    svc: InstitutionService = Depends(_svc),
+):
+    try:
+        return await svc.close_term(term_id)
+    except DomainError as exc:
+        raise _handle_domain_error(exc) from exc
+
+
 @router.get("/courses", response_model=list[CourseResponse])
 async def list_courses(
     institution_id: Optional[int] = Query(None),

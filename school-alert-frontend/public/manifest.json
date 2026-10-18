@@ -1,0 +1,34 @@
+{
+  "name": "SIDTRAC",
+  "short_name": "SIDTRAC",
+  "description": "Sistema Inteligente de Detección Temprana de Riesgo Académico y Conductual",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#07152f",
+  "theme_color": "#2563eb",
+  "orientation": "portrait-primary",
+  "lang": "es-EC",
+  "categories": ["education", "productivity"],
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/apple-icon.png",
+      "sizes": "180x180",
+      "type": "image/png",
+      "purpose": "apple touch icon"
+    },
+    {
+      "src": "/icon-dark-32x32.png",
+      "sizes": "32x32",
+      "type": "image/png"
+    }
+  ],
+  "screenshots": [],
+  "related_applications": [],
+  "prefer_related_applications": false
+}

@@ -50,6 +50,8 @@ RISK_ORDER = {
 INTERVENTION_LOOKBACK_DAYS = 21
 ACTIVE_ALERT_DEDUP_DAYS = 7
 MIN_ACTIONS_FOR_INTERVENTION = 5
+# Ventana de indicadores (asistencia, disciplina, DECE, tutor) para el semáforo / alertas.
+INDICATOR_LOOKBACK_DAYS = 15
 
 
 @dataclass
@@ -103,9 +105,12 @@ class AlertEngine:
         for student in students:
             indicators, raw_level = await self._evaluate_student(student, config)
             intervention = await self._has_active_intervention(student.id)
-            student.current_risk_level = self.apply_mitigation(
-                raw_level, bool(indicators), intervention
-            )
+            final_level = self.apply_mitigation(raw_level, bool(indicators), intervention)
+            student.current_risk_level = final_level
+
+            if final_level == RiskLevel.BAJO:
+                await self._auto_archive_stale_alerts(student.id)
+                continue
 
             if raw_level == RiskLevel.BAJO or not indicators:
                 continue
@@ -140,6 +145,10 @@ class AlertEngine:
         )
         final_level = self.apply_mitigation(raw_level, bool(indicators), intervention)
         student.current_risk_level = final_level
+        
+        if final_level == RiskLevel.BAJO:
+            await self._auto_archive_stale_alerts(student.id)
+            
         return raw_level, final_level, indicators
 
     async def evaluate_all(self) -> EvaluationOutcome:
@@ -157,7 +166,9 @@ class AlertEngine:
         self, student: StudentModel, config: AlertConfigModel
     ) -> tuple[list[Indicator], RiskLevel]:
         indicators: list[Indicator] = []
-        thirty_days_ago = date.today() - timedelta(days=30)
+        lookback_days = INDICATOR_LOOKBACK_DAYS
+        lookback_date = date.today() - timedelta(days=lookback_days)
+        lookback_dt = datetime.now(timezone.utc) - timedelta(days=lookback_days)
 
         avg_result = await self.session.execute(
             select(func.avg(GradeModel.score)).where(GradeModel.student_id == student.id)
@@ -181,7 +192,7 @@ class AlertEngine:
             select(func.count(AttendanceModel.id)).where(
                 AttendanceModel.student_id == student.id,
                 AttendanceModel.status == AttendanceStatus.AUSENTE,
-                AttendanceModel.attendance_date >= thirty_days_ago,
+                AttendanceModel.attendance_date >= lookback_date,
             )
         )
         absences = absences_result.scalar() or 0
@@ -191,7 +202,7 @@ class AlertEngine:
                     code="asistencia",
                     label="Indicador de ausencias",
                     detail=(
-                        f"{absences} ausencias en los últimos 30 días "
+                        f"{absences} ausencias en los últimos {lookback_days} días "
                         f"(umbral medio: {config.absences_medium}, alto: {config.absences_high})"
                     ),
                     extreme=absences >= config.absences_high,
@@ -204,8 +215,7 @@ class AlertEngine:
                 DisciplinaryReportModel.fault_type.in_(
                     [FaultType.GRAVE, FaultType.MUY_GRAVE]
                 ),
-                DisciplinaryReportModel.reported_at
-                >= datetime.now(timezone.utc) - timedelta(days=30),
+                DisciplinaryReportModel.reported_at >= lookback_dt,
             )
         )
         serious_faults = faults_result.scalar() or 0
@@ -215,18 +225,18 @@ class AlertEngine:
                     code="disciplinario",
                     label="Indicador disciplinario",
                     detail=(
-                        f"{serious_faults} faltas graves o muy graves en el último mes "
+                        f"{serious_faults} faltas graves o muy graves en los últimos "
+                        f"{lookback_days} días "
                         f"(umbral: {config.serious_faults_month})"
                     ),
                     extreme=serious_faults >= config.serious_faults_month * 2,
                 )
             )
 
-        thirty_days_ago_dt = datetime.now(timezone.utc) - timedelta(days=30)
         dece_result = await self.session.execute(
             select(DeceReportModel).where(
                 DeceReportModel.student_id == student.id,
-                DeceReportModel.reported_at >= thirty_days_ago_dt,
+                DeceReportModel.reported_at >= lookback_dt,
             )
         )
         dece_reports = list(dece_result.scalars().all())
@@ -254,7 +264,8 @@ class AlertEngine:
                         code="emocional" if has_emotional else "conductual",
                         label="Indicador conductual/emocional (DECE)",
                         detail=(
-                            f"{len(relevant)} reporte(s) DECE relevante(s) en los últimos 30 días"
+                            f"{len(relevant)} reporte(s) DECE relevante(s) en los últimos "
+                            f"{lookback_days} días"
                         ),
                         extreme=high_urgency or len(relevant) >= 2,
                     )
@@ -263,7 +274,7 @@ class AlertEngine:
         tutor_result = await self.session.execute(
             select(func.count(TutorAnnotationModel.id)).where(
                 TutorAnnotationModel.student_id == student.id,
-                TutorAnnotationModel.annotated_at >= thirty_days_ago_dt,
+                TutorAnnotationModel.annotated_at >= lookback_dt,
                 TutorAnnotationModel.annotation_type.in_(
                     [TutorAnnotationType.COMPORTAMIENTO, TutorAnnotationType.EMOCIONAL]
                 ),
@@ -277,7 +288,7 @@ class AlertEngine:
                     label="Indicador de anotaciones del tutor",
                     detail=(
                         f"{tutor_flags} anotación(es) de comportamiento/emocional "
-                        "del tutor en 30 días"
+                        f"del tutor en {lookback_days} días"
                     ),
                     extreme=tutor_flags >= 2,
                 )
@@ -362,9 +373,39 @@ class AlertEngine:
             return None
         return alert.attended_at, alert.level, actions
 
+    async def _manage_existing_active_alerts(self, student_id: int, new_level: RiskLevel) -> bool:
+        """Deduplication logic: A student should only have ONE active system alert at a time.
+        If there is an active alert of >= new_level, return False (do not create).
+        If there is an active alert of < new_level, archive it and return True (escalate).
+        If no active alert, return True."""
+        active_alerts = await self.session.execute(
+            select(AlertModel).where(
+                AlertModel.student_id == student_id,
+                AlertModel.status == AlertStatus.ACTIVA,
+                AlertModel.is_manual == False,
+            )
+        )
+        alerts = list(active_alerts.scalars())
+        if not alerts:
+            return True
+            
+        should_create = True
+        for alert in alerts:
+            if RISK_ORDER[alert.level] >= RISK_ORDER[new_level]:
+                should_create = False
+                break
+                
+        if should_create:
+            for alert in alerts:
+                alert.status = AlertStatus.ARCHIVADA
+                alert.actions_taken = "Sistema: Alerta archivada por escalamiento a un nivel superior."
+                alert.attended_at = datetime.now(timezone.utc)
+        
+        return should_create
+
     async def _should_create_alert(self, student_id: int, level: RiskLevel) -> bool:
         """RF-31 + RN: no duplicar alertas activas ni recrear casos ya atendidos."""
-        if await self._has_recent_active_alert(student_id, level):
+        if not await self._manage_existing_active_alerts(student_id, level):
             return False
 
         baseline = await self._get_intervention_baseline(student_id)
@@ -390,18 +431,19 @@ class AlertEngine:
             return RiskLevel.ALTO
         return RiskLevel.MEDIO
 
-    async def _has_recent_active_alert(self, student_id: int, level: RiskLevel) -> bool:
-        """RF-31 / RN-05: no duplicate active alerts of same level within 7 days."""
-        dedup_since = datetime.now(timezone.utc) - timedelta(days=ACTIVE_ALERT_DEDUP_DAYS)
-        result = await self.session.execute(
-            select(AlertModel.id).where(
+    async def _auto_archive_stale_alerts(self, student_id: int) -> None:
+        """Archiva automáticamente las alertas activas si el estudiante vuelve a estado Estable."""
+        active_alerts = await self.session.execute(
+            select(AlertModel).where(
                 AlertModel.student_id == student_id,
-                AlertModel.level == level,
                 AlertModel.status == AlertStatus.ACTIVA,
-                AlertModel.created_at >= dedup_since,
+                AlertModel.is_manual == False,
             )
         )
-        return result.scalar_one_or_none() is not None
+        for alert in active_alerts.scalars():
+            alert.status = AlertStatus.ARCHIVADA
+            alert.actions_taken = "Sistema: Alerta archivada automáticamente. El estudiante recuperó el estado Estable."
+            alert.attended_at = datetime.now(timezone.utc)
 
     async def _create_alert(
         self, student: StudentModel, indicators: list[Indicator], level: RiskLevel
